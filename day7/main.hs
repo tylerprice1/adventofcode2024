@@ -44,10 +44,7 @@ evaluate expression = case expression of
   Subtract lhs rhs -> evaluate lhs - evaluate rhs
   Multiply lhs rhs -> evaluate lhs * evaluate rhs
   Divide lhs rhs -> evaluate lhs `div` evaluate rhs
-  Concat lhs rhs -> read (show elhs ++ show erhs) :: Int
-    where
-      elhs = evaluate lhs
-      erhs = evaluate rhs
+  Concat lhs rhs -> read (show (evaluate lhs) ++ show (evaluate rhs)) :: Int
 
 generateBinaryExpression :: String -> Expression -> Expression -> Expression
 generateBinaryExpression "+" = Add
@@ -59,29 +56,26 @@ generateBinaryExpression "||" = Concat
 generateCombinations :: [Int] -> [String] -> [Expression]
 generateCombinations [] _ = []
 generateCombinations [only] _ = [Literal only]
-generateCombinations (l : rest) operators = concatMap (\o -> [generateBinaryExpression o lhs rhs | rhs <- rhss]) operators
+generateCombinations (l : rest) operators = concatMap (\o -> [generateBinaryExpression o lhs rhs | lhs <- lhss]) operators
   where
-    lhs = Literal l
-    rhss = generateCombinations rest operators ++ generateCombinations (reverse rest) operators
+    lhss = generateCombinations rest operators
+    rhs = Literal l
 
 findExpression :: Int -> [Int] -> [String] -> Maybe Expression
 findExpression result inputs operators = correct
   where
-    expressions = generateCombinations inputs operators ++ generateCombinations (reverse inputs) operators
-    evaluated = map (\e -> (evaluate e, e)) expressions
-    correct = find (\e -> evaluate e == result) (traceShowId expressions)
+    expressions = generateCombinations (reverse inputs) operators -- generate RTL to evaluate LTR
+    correct = find (\e -> evaluate e == result) expressions
 
 part1 :: [OperatorlessEquation] -> Int
 part1 equations = sum (map fst validEquations)
   where
     operators = ["+", "*"]
-    expressions = map (\(result, inputs) -> findExpression result inputs operators) equations
     validEquations = filter (\(result, inputs) -> isJust (findExpression result inputs operators)) equations
 
 part2 equations = sum (map fst validEquations)
   where
     operators = ["+", "*", "||"]
-    expressions = map (\(result, inputs) -> findExpression result inputs operators) equations
     validEquations = filter (\(result, inputs) -> isJust (findExpression result inputs operators)) equations
 
 parseLine :: String -> OperatorlessEquation
@@ -105,7 +99,7 @@ main = do
 
   putStrLn "----- Part 1 -----"
   print (part1 test) -- expected: 3749
-  -- print (part1 input) -- expected: 3598800864292
+  print (part1 input) -- expected: 3598800864292
   putStrLn "----- Part 2 -----"
   print (part2 test) -- expected: 11387
-  -- print (part2 input) -- expected: ?
+  print (part2 input) -- expected: ?
