@@ -1,9 +1,9 @@
 import Control.DeepSeq
 import Control.Parallel.Strategies
-import Data.Array
 import Data.List qualified as List
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe qualified as Maybe
 import Data.Set qualified as Set
+import Data.Vector qualified as Vector
 import Debug.Trace
 import Text.Read (readMaybe)
 
@@ -15,9 +15,9 @@ type Column = Int
 
 type Position = (Row, Column)
 
-type Grid = Array Position Char
+type Grid = Vector.Vector (Vector.Vector Char)
 
-type Path = [DirectionalPosition]
+type Visited = Set.Set DirectionalPosition
 
 type DirectionalPosition = (Row, Column, Direction)
 
@@ -45,22 +45,26 @@ instance Read Direction where
 unique :: (Ord a) => [a] -> [a]
 unique = Set.toList . Set.fromList
 
-getCurrentPosition :: Grid -> Maybe Position
+getCurrentPosition :: Grid -> Position
 getCurrentPosition grid =
-  case List.find (\(_, ch) -> ch == '^') (assocs grid) of
-    Nothing -> Nothing
-    Just (position, ch) -> Just position
+  let row = Maybe.fromJust (Vector.findIndex (\r -> '^' `elem` r) grid)
+      column = Maybe.fromJust (Vector.findIndex (== '^') (grid Vector.! row))
+   in (row, column)
 
 updateGridItem :: Grid -> Row -> Column -> (Char -> Char) -> Grid
-updateGridItem grid row column f = grid // [((row, column), f (grid ! (row, column)))]
+updateGridItem grid row column f = grid Vector.// [(row, (grid Vector.! row) Vector.// [(column, f (grid Vector.! row Vector.! column))])]
 
 updateGrid :: Grid -> DirectionalPosition -> Grid
 updateGrid grid (r, c, dir) = updateGridItem grid r c (const ((head . show) dir))
 
+getGridSize grid = (Vector.length grid, (Vector.length . Vector.head) grid)
+
 isPositionValid :: Grid -> DirectionalPosition -> Bool
-isPositionValid grid (r, c, dir) = r >= minR && r <= maxR && c >= minC && c <= maxC
+isPositionValid grid (r, c, dir) = r >= minR && r < maxR && c >= minC && c < maxC
   where
-    ((minR, minC), (maxR, maxC)) = bounds grid
+    minR = 0
+    minC = 0
+    (maxR, maxC) = getGridSize grid
 
 advance :: DirectionalPosition -> DirectionalPosition
 advance (r, c, dir) = case dir of
@@ -84,61 +88,51 @@ addDirection (row, column) direction = (row, column, direction)
 removeDirection :: DirectionalPosition -> Position
 removeDirection (row, column, _) = (row, column)
 
-navigate :: Grid -> DirectionalPosition -> Path -> Maybe (Path, Grid)
-navigate grid position path
-  | position `elem` path = Nothing -- already visited
+navigate :: Grid -> DirectionalPosition -> Visited -> Maybe (Visited, Grid)
+navigate grid position visited
+  | position `Set.member` visited = Nothing -- already visited
   | otherwise =
       if isPositionValid grid advancedPosition
         then
           let (nextRow, nextColumn, _) = advancedPosition
-              nextChar = grid ! (nextRow, nextColumn)
+              nextChar = grid Vector.! nextRow Vector.! nextColumn
               newPosition
                 | nextChar == 'O' || nextChar == '#' = turnedPosition
                 | otherwise = advancedPosition
-           in navigate grid newPosition updatedPath
+           in navigate grid newPosition updatedVisited
         else
-          Just (updatedPath, grid)
+          Just (updatedVisited, grid)
   where
     turnedPosition = turn position
     advancedPosition = advance position
-    updatedPath = position : path
+    updatedVisited = Set.insert position visited
 
-part1 :: Grid -> Maybe Int
-part1 grid =
-  case getCurrentPosition grid of
-    Nothing -> Nothing
-    Just (row, column) -> Just positionsCount
-      where
-        path = case navigate grid (row, column, U) [] of
-          Nothing -> []
-          Just (path, _) -> path
-        positions = map removeDirection path
-        uniquePositions = unique positions
-        positionsCount = length uniquePositions
+part1 :: Grid -> Int
+part1 grid = positionsCount
+  where
+    (row, column) = getCurrentPosition grid
+    visited = case navigate grid (row, column, U) Set.empty of
+      Nothing -> Set.empty
+      Just (visited, _) -> visited
+    positionsCount = Set.size (Set.map removeDirection visited)
 
-part2 :: Grid -> Maybe Int
-part2 grid = case getCurrentPosition grid of
-  Nothing -> Nothing
-  Just position ->
-    Just (length (filter (== Nothing) results))
-    where
-      (row, column) = position
-      (_, (height, width)) = bounds grid
-      rows = [1 .. height]
-      columns = [1 .. width]
+part2 :: Grid -> Int
+part2 grid = length (filter id results)
+  where
+    position = getCurrentPosition grid
+    (row, column) = position
+    (height, width) = getGridSize grid
+    rows = [0 .. height - 1]
+    columns = [0 .. width - 1]
 
-      grids :: [Grid]
-      grids =
-        (unique . concat) [[updateGridItem grid r c (\c -> if c == '.' then 'O' else c) | c <- columns] | r <- rows]
+    grids :: [Grid]
+    grids =
+      (unique . concat) [[updateGridItem grid r c (\c -> if c == '.' then 'O' else c) | c <- columns] | r <- rows]
 
-      results = (map (\g -> navigate g (row, column, U) []) grids) `using` parListChunk 100 rdeepseq
+    results = map (\g -> Maybe.isNothing (navigate g (row, column, U) Set.empty)) grids `using` parListChunk 100 rdeepseq
 
-processFile contents =
-  let enumerate = List.zip [1 ..]
-      ls = lines contents
-      height = length ls
-      width = (length . head) ls
-   in array ((1, 1), (height, width)) (concat [[((r, c), ch) | (c, ch) <- enumerate l] | (r, l) <- enumerate ls])
+processFile :: String -> Grid
+processFile contents = Vector.fromList [Vector.fromList l | l <- lines contents]
 
 main = do
   testFile <- readFile "./test.txt"
@@ -148,10 +142,10 @@ main = do
   let input = processFile inputFile
 
   putStrLn "----- Part 1 -----"
-  (print . fromJust) (part1 test) -- expected: 41
-  (print . fromJust) (part1 input) -- expected: 4988
+  print (part1 test) -- expected: 41
+  print (part1 input) -- expected: 4988
   --
   putStrLn "----- Part 2 -----"
-  (print . fromJust) (part2 test) -- expected: 6
-  (print . fromJust) (part2 input) -- expected: ?
+  print (part2 test) -- expected: 6
+  print (part2 input) -- expected: 1697
   return ()
