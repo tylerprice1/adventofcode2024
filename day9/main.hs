@@ -100,41 +100,40 @@ part1 input = checksum reordered
 part2 :: [BlockSequence] -> Int
 part2 input = checksum (concatMap getBlocksInBlockSequence (traceShowId reordered))
   where
-    blocks = Vector.fromList input
-    reordered = reorderFiles blocks
+    reordered = reorderFiles input
 
-    reorderFiles :: Vector.Vector BlockSequence -> [BlockSequence]
+    reorderFiles :: [BlockSequence] -> [BlockSequence]
+    reorderFiles [] = []
+    reorderFiles [only] = [only]
     reorderFiles blocks
-      | Vector.length blocks <= 1 || Vector.all isBlockSequenceFree blocks = Vector.toList blocks
+      | all isBlockSequenceFree blocks = blocks
       | otherwise =
-          let (first, rest) = (Vector.head blocks, Vector.tail blocks)
+          let (first, rest) = (head blocks, tail blocks)
            in case first of
                 Free freeLen ->
                   let free = first
                       (beginning, lastFile) = getLastFileBlock blocks
-                      beginningExcludingFirst = Vector.tail beginning
+                      beginningExcludingFirst = tail beginning
                       File _ fileLen = lastFile
                       diff = freeLen - fileLen
                       remainingFree = Free diff
                    in case signum diff of
                         -1 -> traceShow ("Not enough", "free:", free, "beginning:", beginning, "lastFile:", lastFile, "reordered:", reorderFiles beginning, lastFile) reorderFiles beginning ++ [lastFile]
                         0 -> traceShow ("Exact     ", "free:", free, "beginning:", beginning, "lastFile:", lastFile, "reordered:", reorderFiles beginningExcludingFirst) (lastFile : reorderFiles beginningExcludingFirst)
-                        1 -> traceShow ("Extra     ", "free:", free, "beginning:", beginning, "lastFile:", lastFile, "reordered:", reorderFiles (remainingFree `Vector.cons` beginningExcludingFirst)) (lastFile : reorderFiles (remainingFree `Vector.cons` beginningExcludingFirst))
+                        1 -> traceShow ("Extra     ", "free:", free, "beginning:", beginning, "lastFile:", lastFile, "reordered:", reorderFiles (remainingFree : beginningExcludingFirst)) (lastFile : reorderFiles (remainingFree : beginningExcludingFirst))
                 firstFile -> traceShow ("File      ", "firstFile:", firstFile, "reordered:", reorderFiles rest) (firstFile : reorderFiles rest)
 
-    getLastFileBlock :: Vector.Vector BlockSequence -> (Vector.Vector BlockSequence, BlockSequence)
-    getLastFileBlock blocks
-      | Vector.null blocks = error "No file in blocks"
-      | otherwise =
-          let len = Vector.length blocks
-              (beginning, last') = Vector.splitAt (len - 1) blocks
-              last = Vector.head last'
-           in case last of
-                Free _ ->
-                  let (newBeginning, newLast) = getLastFileBlock beginning
-                      vconcat = (Vector.++)
-                   in (newBeginning `vconcat` Vector.fromList [last], newLast)
-                f -> (beginning, f)
+    getLastFileBlock :: [BlockSequence] -> ([BlockSequence], BlockSequence)
+    getLastFileBlock [] = error "No file in blocks"
+    getLastFileBlock blocks =
+      let len = length blocks
+          (beginning, last') = splitAt (len - 1) blocks
+          last = head last'
+       in case last of
+            Free _ ->
+              let (newBeginning, newLast) = getLastFileBlock beginning
+               in (newBeginning ++ [last], newLast)
+            f -> (beginning, f)
 
 main = do
   testFile <- readFile "./test.txt"
