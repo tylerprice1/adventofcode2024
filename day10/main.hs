@@ -1,4 +1,5 @@
 import Data.Maybe (catMaybes, isJust)
+import Data.Set qualified as Set
 import Data.Vector qualified as Vector
 import Debug.Trace (traceShow, traceShowId)
 
@@ -89,7 +90,7 @@ filterPositions predicate grid = Vector.concatMap (findInRow predicate) (Vector.
 
 findTrailHeads = filterPositions (== 0)
 
-exploreTrail :: TopologicalMap -> Position -> Vector.Vector Trail
+exploreTrail :: TopologicalMap -> TrailHead -> Vector.Vector Trail
 exploreTrail grid trailHead = explore grid trailHead []
   where
     explore :: TopologicalMap -> Position -> [Position] -> Vector.Vector Trail
@@ -104,12 +105,18 @@ exploreTrail grid trailHead = explore grid trailHead []
                 then Vector.singleton (Vector.fromList (reverse updatedPath))
                 else Vector.concatMap (\pos -> explore grid pos updatedPath) nextPositions
 
+getTrailScore :: TopologicalMap -> TrailHead -> Int
+getTrailScore grid trailHead =
+  let allTrails = exploreTrail grid trailHead
+   in Set.size (Set.fromList (Vector.toList (Vector.map (\trail -> (Vector.head trail, Vector.last trail)) allTrails)))
+
 part1 input =
   let trailHeads = findTrailHeads input
-   in Vector.concatMap (exploreTrail input) trailHeads
+   in Vector.sum (Vector.map (getTrailScore input) trailHeads)
 
-part2 :: TopologicalMap -> String
-part2 input = ""
+part2 input =
+  let trailHeads = findTrailHeads input
+   in Vector.length (Vector.concatMap (exploreTrail input) trailHeads)
 
 processInput :: String -> TopologicalMap
 processInput contents = Vector.fromList [Vector.fromList [read [ch] :: Int | ch <- l] | l <- lines contents]
@@ -141,20 +148,8 @@ main = do
   let input = processInput inputFile
 
   putStrLn "----- Part 1 -----"
-  let part1_test_result = part1 test
-  -- mapM_ (mapM_ print) part1_test_result -- Expected: ?
-  -- print (length part1_test_result)
-
-  mapM_
-    ( \trail -> do
-        printTrail test trail
-        putStrLn ""
-    )
-    part1_test_result
-
-  print (length part1_test_result)
-
--- print (part1 input) -- Expected: ?
--- putStrLn "----- Part 2 -----"
--- print (part2 test) -- Expected: ?
--- print (part2 input) -- Expected: ?
+  print (part1 test) -- Expected: 36
+  print (part1 input) -- Expected: 548
+  putStrLn "----- Part 2 -----"
+  print (part2 test) -- Expected: 81
+  print (part2 input) -- Expected: ?
