@@ -1,8 +1,112 @@
-processInput contents = contents
+import Data.Maybe (catMaybes, isJust)
+import Data.Vector qualified as Vector
+import Debug.Trace (traceShow, traceShowId)
 
-part1 input = ""
+type Height = Int
 
+type RowIndex = Int
+
+type ColumnIndex = Int
+
+type Position = (RowIndex, ColumnIndex)
+
+type Row = Vector.Vector Height
+
+type TopologicalMap = Vector.Vector Row
+
+type Trail = Vector.Vector Position
+
+type TrailHead = Position
+
+data Direction = U | D | L | R
+  deriving (Eq, Show)
+
+hasPosition :: TopologicalMap -> Position -> Bool
+hasPosition grid (r, c) =
+  let rowCount = Vector.length grid
+      columnCount = Vector.length ((Vector.!) grid r)
+   in r >= 0 && r < rowCount && c >= 0 && c < columnCount
+
+getIfHasPosition :: TopologicalMap -> Position -> Maybe Position
+getIfHasPosition grid pos = if hasPosition grid pos then Just pos else Nothing
+
+getHeightAtPosition :: TopologicalMap -> Position -> Height
+getHeightAtPosition grid (r, c) = (Vector.!) ((Vector.!) grid r) c
+
+getPositionInDirection :: TopologicalMap -> Position -> Direction -> Maybe Position
+getPositionInDirection grid (r, c) direction =
+  getIfHasPosition
+    grid
+    ( case direction of
+        L -> (r, c - 1)
+        U -> (r - 1, c)
+        R -> (r, c + 1)
+        D -> (r + 1, c)
+    )
+
+getSurroundingPositions :: TopologicalMap -> Position -> [Position]
+getSurroundingPositions map (row, column) =
+  let getPosition = getPositionInDirection map (row, column)
+   in catMaybes [getPosition L, getPosition U, getPosition R, getPosition D]
+
+filterPositions :: (Height -> Bool) -> TopologicalMap -> Vector.Vector Position
+filterPositions predicate grid = Vector.concatMap (findInRow predicate) (Vector.indexed grid)
+  where
+    findInRow :: (Height -> Bool) -> (RowIndex, Row) -> Vector.Vector Position
+    findInRow predicate (rowIndex, row) =
+      Vector.imapMaybe
+        ( \column height ->
+            if predicate height
+              then Just (rowIndex, column)
+              else Nothing
+        )
+        row
+
+findTrailHeads = filterPositions (== 0)
+
+exploreTrail :: TopologicalMap -> Position -> [Trail]
+exploreTrail grid trailHead = explore grid trailHead []
+  where
+    explore :: TopologicalMap -> Position -> [Position] -> [Trail]
+    explore grid position reversedPath =
+      let height = getHeightAtPosition grid position
+          updatedPath = position : reversedPath
+          nextPositions = filter (\pos -> getHeightAtPosition grid pos == height + 1) (getSurroundingPositions grid position)
+       in if position `elem` reversedPath
+            then []
+            else
+              if height == 9
+                then [Vector.fromList (reverse updatedPath)]
+                else concatMap (\pos -> explore grid pos updatedPath) nextPositions
+
+part1 input =
+  let trailHeads = findTrailHeads input
+   in concatMap (exploreTrail input) trailHeads
+
+part2 :: TopologicalMap -> String
 part2 input = ""
+
+processInput :: String -> TopologicalMap
+processInput contents = Vector.fromList [Vector.fromList [read [ch] :: Int | ch <- l] | l <- lines contents]
+
+showTrail :: TopologicalMap -> Trail -> Vector.Vector (String)
+showTrail grid trail = (Vector.imap showColumns grid)
+  where
+    showColumns rowIndex row =
+      concat
+        ( Vector.imap
+            ( \columnIndex height ->
+                if Vector.elem (rowIndex, columnIndex) trail
+                  then show height
+                  else "."
+            )
+            row
+        )
+
+printGrid :: (Show a) => (Vector.Vector a) -> IO ()
+printGrid = Vector.mapM_ print
+
+printTrail grid trail = printGrid (showTrail grid trail)
 
 main = do
   testFile <- readFile "./test.txt"
@@ -12,8 +116,20 @@ main = do
   let input = processInput inputFile
 
   putStrLn "----- Part 1 -----"
-  print (part1 test) -- Expected: ?
-  print (part1 input) -- Expected: ?
-  putStrLn "----- Part 2 -----"
-  print (part2 test) -- Expected: ?
-  print (part2 input) -- Expected: ?
+  let part1_test_result = part1 test
+  -- mapM_ (mapM_ print) part1_test_result -- Expected: ?
+  -- print (length part1_test_result)
+
+  mapM_
+    ( \trail -> do
+        printTrail test trail
+        putStrLn ""
+    )
+    part1_test_result
+
+  print (length part1_test_result)
+
+-- print (part1 input) -- Expected: ?
+-- putStrLn "----- Part 2 -----"
+-- print (part2 test) -- Expected: ?
+-- print (part2 input) -- Expected: ?
