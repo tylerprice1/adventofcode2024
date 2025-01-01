@@ -4,7 +4,7 @@
 import Data.Char (isDigit, isSpace)
 import Data.List
 import Data.Maybe (fromJust, fromMaybe)
-import Data.Vector.Strict qualified as Vector
+import Data.Vector qualified as Vector
 import Debug.Trace (trace, traceShow, traceShowId)
 import Text.Read (readMaybe)
 
@@ -117,32 +117,36 @@ part1 input = checksum reordered
 part2 :: [BlockSequence] -> Int
 part2 input = checksum (concatMap getBlocksInBlockSequence reordered)
   where
-    reordered = reorder (Vector.fromList input)
+    inputVector = Vector.fromList input
+    reordered = reorder inputVector
 
-    isBlockSequenceFreeOfAtLeastLength (Free freeLen) len = freeLen >= len
-    isBlockSequenceFreeOfAtLeastLength _ _ = False
+    isFreeBlockSequenceOfAtLeastLength (File _ _) _ = False
+    isFreeBlockSequenceOfAtLeastLength (Free freeLen) len = freeLen >= len
 
     concatv = (Vector.++)
     prependv = Vector.cons
     appendv = Vector.snoc
 
+    -- Vector.cons is O(n) while List.cons is O(1), so it's more efficient to convert to a list, merge, and then convert back to a vector
     mergeConsecutiveFree v
       | Vector.length v <= 1 = v
-      | otherwise =
-          let (first, firstTail) = fromJust (Vector.uncons v)
-              (second, secondTail) = fromJust (Vector.uncons firstTail)
-           in case (first, second) of
-                (File _ _, _) -> first `prependv` mergeConsecutiveFree firstTail
-                (_, File _ _) -> first `prependv` mergeConsecutiveFree firstTail
-                (Free a, Free b) -> Free (a + b) `prependv` mergeConsecutiveFree secondTail
+      | otherwise = Vector.fromList (merge (Vector.toList v))
+      where
+        merge [] = []
+        merge [only] = [only]
+        merge (first : second : rest) = case (first, second) of
+          (File _ _, _) -> first : merge (second : rest)
+          (_, File _ _) -> first : second : merge rest
+          (Free a, Free b) -> Free (a + b) : merge rest
 
+    -- O(n^2)
     reorder :: Vector.Vector BlockSequence -> Vector.Vector BlockSequence
     reorder blocks = case Vector.unsnoc blocks of
       Nothing -> blocks
       Just (init, last) -> case last of
         Free _ -> reorder init `appendv` last
-        File id fileLen ->
-          case Vector.findIndex (`isBlockSequenceFreeOfAtLeastLength` fileLen) init of
+        File _ fileLen ->
+          case Vector.findIndex (`isFreeBlockSequenceOfAtLeastLength` fileLen) init of
             Nothing -> reorder init `appendv` last
             Just index ->
               let left = Vector.take index init
@@ -161,9 +165,8 @@ main = do
   let input = processInput inputFile
 
   putStrLn "----- Part 1 -----"
-  print (part1 (processInput testFile)) -- 1928
-  print (part1 (processInput inputFile)) -- 6359213660505
+  print (part1 test) -- 1928
+  print (part1 input) -- 6359213660505
   putStrLn "----- Part 2 -----"
   print (part2 test) -- 2858
-  print (part2 input) -- ?
-  return ()
+  print (part2 input) -- 6381624803796
