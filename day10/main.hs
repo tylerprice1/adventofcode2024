@@ -2,6 +2,31 @@ import Data.Maybe (catMaybes, isJust)
 import Data.Vector qualified as Vector
 import Debug.Trace (traceShow, traceShowId)
 
+data GridNode = Position Height (Maybe GridNode) (Maybe GridNode) (Maybe GridNode) (Maybe GridNode)
+
+processInput' :: String -> [[GridNode]]
+processInput' contents =
+  let grid = Vector.fromList [Vector.fromList [read [ch] :: Int | ch <- l] | l <- lines contents]
+      unlinkedNodes :: Vector.Vector (Vector.Vector GridNode)
+      unlinkedNodes =
+        Vector.map
+          (Vector.map (\height -> Position height Nothing Nothing Nothing Nothing))
+          grid
+
+      getNode :: Int -> Int -> Maybe GridNode
+      getNode r c = case (Vector.!?) unlinkedNodes r of
+        Nothing -> Nothing
+        Just row -> (Vector.!?) row c
+
+      getUp r = getNode (r - 1)
+      getDown r = getNode (r + 1)
+      getLeft r c = getNode r (c - 1)
+      getRight r c = getNode r (c + 1)
+
+      linkedNodes :: Vector.Vector (Vector.Vector GridNode)
+      linkedNodes = Vector.imap (\r row -> Vector.imap (\c height -> Position height (getLeft r c) (getUp r c) (getRight r c) (getDown r c)) row) grid
+   in Vector.toList (Vector.map Vector.toList linkedNodes)
+
 type Height = Int
 
 type RowIndex = Int
@@ -44,10 +69,10 @@ getPositionInDirection grid (r, c) direction =
         D -> (r + 1, c)
     )
 
-getSurroundingPositions :: TopologicalMap -> Position -> [Position]
+getSurroundingPositions :: TopologicalMap -> Position -> Vector.Vector Position
 getSurroundingPositions map (row, column) =
   let getPosition = getPositionInDirection map (row, column)
-   in catMaybes [getPosition L, getPosition U, getPosition R, getPosition D]
+   in Vector.fromList (catMaybes [getPosition L, getPosition U, getPosition R, getPosition D])
 
 filterPositions :: (Height -> Bool) -> TopologicalMap -> Vector.Vector Position
 filterPositions predicate grid = Vector.concatMap (findInRow predicate) (Vector.indexed grid)
@@ -64,24 +89,24 @@ filterPositions predicate grid = Vector.concatMap (findInRow predicate) (Vector.
 
 findTrailHeads = filterPositions (== 0)
 
-exploreTrail :: TopologicalMap -> Position -> [Trail]
+exploreTrail :: TopologicalMap -> Position -> Vector.Vector Trail
 exploreTrail grid trailHead = explore grid trailHead []
   where
-    explore :: TopologicalMap -> Position -> [Position] -> [Trail]
+    explore :: TopologicalMap -> Position -> [Position] -> Vector.Vector Trail
     explore grid position reversedPath =
       let height = getHeightAtPosition grid position
           updatedPath = position : reversedPath
-          nextPositions = filter (\pos -> getHeightAtPosition grid pos == height + 1) (getSurroundingPositions grid position)
+          nextPositions = Vector.filter (\pos -> getHeightAtPosition grid pos == height + 1) (getSurroundingPositions grid position)
        in if position `elem` reversedPath
-            then []
+            then Vector.empty
             else
               if height == 9
-                then [Vector.fromList (reverse updatedPath)]
-                else concatMap (\pos -> explore grid pos updatedPath) nextPositions
+                then Vector.singleton (Vector.fromList (reverse updatedPath))
+                else Vector.concatMap (\pos -> explore grid pos updatedPath) nextPositions
 
 part1 input =
   let trailHeads = findTrailHeads input
-   in concatMap (exploreTrail input) trailHeads
+   in Vector.concatMap (exploreTrail input) trailHeads
 
 part2 :: TopologicalMap -> String
 part2 input = ""
@@ -89,8 +114,8 @@ part2 input = ""
 processInput :: String -> TopologicalMap
 processInput contents = Vector.fromList [Vector.fromList [read [ch] :: Int | ch <- l] | l <- lines contents]
 
-showTrail :: TopologicalMap -> Trail -> Vector.Vector (String)
-showTrail grid trail = (Vector.imap showColumns grid)
+showTrail :: TopologicalMap -> Trail -> Vector.Vector String
+showTrail grid trail = Vector.imap showColumns grid
   where
     showColumns rowIndex row =
       concat
@@ -103,7 +128,7 @@ showTrail grid trail = (Vector.imap showColumns grid)
             row
         )
 
-printGrid :: (Show a) => (Vector.Vector a) -> IO ()
+printGrid :: (Show a) => Vector.Vector a -> IO ()
 printGrid = Vector.mapM_ print
 
 printTrail grid trail = printGrid (showTrail grid trail)
