@@ -2,10 +2,24 @@
 
 {-# HLINT ignore "Use lambda-case" #-}
 import Data.Char (isDigit, isSpace)
-import Data.Maybe (fromMaybe)
+import Data.List
+import Data.Maybe (fromJust, fromMaybe)
 import Data.Vector.Strict qualified as Vector
-import Debug.Trace (traceShow, traceShowId)
+import Debug.Trace (trace, traceShow, traceShowId)
 import Text.Read (readMaybe)
+
+splitOnFirst :: (a -> Bool) -> [a] -> Maybe ([a], a, [a])
+splitOnFirst _ [] = Nothing
+splitOnFirst predicate (first : rest) =
+  if predicate first
+    then Just ([], first, rest)
+    else case splitOnFirst predicate rest of
+      Nothing -> Nothing
+      Just (restFalse, match, restTrue) -> Just (first : restFalse, match, restTrue)
+
+splitVectorAtLast v =
+  let (beginning, last') = Vector.splitAt (Vector.length v - 1) v
+   in (beginning, Vector.head last')
 
 mapFilter :: (a -> Maybe b) -> [a] -> [b]
 mapFilter fn [] = []
@@ -40,6 +54,9 @@ instance Show BlockSequence where
   show (Free len) = replicate len '.'
   show (File id len) = concat (replicate len (show id))
 
+showBlockSequences :: Vector.Vector BlockSequence -> String
+showBlockSequences = Vector.foldr (\block str -> show block ++ str) ""
+
 getBlocksInBlockSequence :: BlockSequence -> [Block]
 getBlocksInBlockSequence (Free len) = replicate len FreeBlock
 getBlocksInBlockSequence (File id len) = replicate len (FileBlock id)
@@ -62,7 +79,7 @@ checksum blocks = sum products
     numbers =
       mapFilter
         ( \block -> case block of
-            FreeBlock -> Nothing
+            FreeBlock -> Just 0
             FileBlock id -> Just id
         )
         blocks
@@ -98,42 +115,43 @@ part1 input = checksum reordered
             last = Vector.head last'
 
 part2 :: [BlockSequence] -> Int
-part2 input = checksum (concatMap getBlocksInBlockSequence (traceShowId reordered))
+part2 input = checksum (concatMap getBlocksInBlockSequence reordered)
   where
-    reordered = reorderFiles input
+    reordered = reorder (Vector.fromList input)
 
-    reorderFiles :: [BlockSequence] -> [BlockSequence]
-    reorderFiles [] = []
-    reorderFiles [only] = [only]
-    reorderFiles blocks
-      | all isBlockSequenceFree blocks = blocks
+    isBlockSequenceFreeOfAtLeastLength (Free freeLen) len = freeLen >= len
+    isBlockSequenceFreeOfAtLeastLength _ _ = False
+
+    concatv = (Vector.++)
+    prependv = Vector.cons
+    appendv = Vector.snoc
+
+    mergeConsecutiveFree v
+      | Vector.length v <= 1 = v
       | otherwise =
-          let (first, rest) = (head blocks, tail blocks)
-           in case first of
-                Free freeLen ->
-                  let free = first
-                      (beginning, lastFile) = getLastFileBlock blocks
-                      beginningExcludingFirst = tail beginning
-                      File _ fileLen = lastFile
-                      diff = freeLen - fileLen
-                      remainingFree = Free diff
-                   in case signum diff of
-                        -1 -> traceShow ("Not enough", "free:", free, "beginning:", beginning, "lastFile:", lastFile, "reordered:", reorderFiles beginning, lastFile) reorderFiles beginning ++ [lastFile]
-                        0 -> traceShow ("Exact     ", "free:", free, "beginning:", beginning, "lastFile:", lastFile, "reordered:", reorderFiles beginningExcludingFirst) (lastFile : reorderFiles beginningExcludingFirst)
-                        1 -> traceShow ("Extra     ", "free:", free, "beginning:", beginning, "lastFile:", lastFile, "reordered:", reorderFiles (remainingFree : beginningExcludingFirst)) (lastFile : reorderFiles (remainingFree : beginningExcludingFirst))
-                firstFile -> traceShow ("File      ", "firstFile:", firstFile, "reordered:", reorderFiles rest) (firstFile : reorderFiles rest)
+          let (first, firstTail) = fromJust (Vector.uncons v)
+              (second, secondTail) = fromJust (Vector.uncons firstTail)
+           in case (first, second) of
+                (File _ _, _) -> first `prependv` mergeConsecutiveFree firstTail
+                (_, File _ _) -> first `prependv` mergeConsecutiveFree firstTail
+                (Free a, Free b) -> Free (a + b) `prependv` mergeConsecutiveFree secondTail
 
-    getLastFileBlock :: [BlockSequence] -> ([BlockSequence], BlockSequence)
-    getLastFileBlock [] = error "No file in blocks"
-    getLastFileBlock blocks =
-      let len = length blocks
-          (beginning, last') = splitAt (len - 1) blocks
-          last = head last'
-       in case last of
-            Free _ ->
-              let (newBeginning, newLast) = getLastFileBlock beginning
-               in (newBeginning ++ [last], newLast)
-            f -> (beginning, f)
+    reorder :: Vector.Vector BlockSequence -> Vector.Vector BlockSequence
+    reorder blocks = case Vector.unsnoc blocks of
+      Nothing -> blocks
+      Just (init, last) -> case last of
+        Free _ -> reorder init `appendv` last
+        File id fileLen ->
+          case Vector.findIndex (`isBlockSequenceFreeOfAtLeastLength` fileLen) init of
+            Nothing -> reorder init `appendv` last
+            Just index ->
+              let left = Vector.take index init
+                  Free freeLen = (Vector.!) init index
+                  right = Vector.drop (index + 1) init
+                  diff = freeLen - fileLen
+                  movedBlocks = Vector.fromList (if diff > 0 then [last, Free diff] else [last])
+                  newBlocks = mergeConsecutiveFree (left `concatv` movedBlocks `concatv` right `appendv` Free fileLen)
+               in reorder newBlocks
 
 main = do
   testFile <- readFile "./test.txt"
@@ -143,9 +161,9 @@ main = do
   let input = processInput inputFile
 
   putStrLn "----- Part 1 -----"
-  -- print (part1 (processInput testFile)) -- 1928
-  -- print (part1 (processInput inputFile)) -- 6359213660505
+  print (part1 (processInput testFile)) -- 1928
+  print (part1 (processInput inputFile)) -- 6359213660505
   putStrLn "----- Part 2 -----"
   print (part2 test) -- 2858
-  -- print (part2 input) -- ?
+  print (part2 input) -- ?
   return ()
