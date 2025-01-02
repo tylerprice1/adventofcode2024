@@ -1,12 +1,14 @@
 import Control.Parallel qualified as Parallel
-import Data.Map (Map, empty)
+import Data.Map qualified as Map
 import Debug.Trace (traceShow, traceShowId)
 
-type Stone = (Int, String)
+type Depth = Int
+
+type Stone = Int
 
 type UpdatedStone = Either Stone (Stone, Stone)
 
-type StoneUpdateCache = Map Stone UpdatedStone
+type StoneResultCache = Map.Map (Stone, Depth) Int
 
 numDigits :: Int -> Int
 numDigits n
@@ -18,49 +20,60 @@ numDigits n
   | n >= 10 = 1 + numDigits (n `div` 10)
   | otherwise = 1
 
-intToStone :: Int -> (Int, String)
-intToStone n = (n, show n)
+strToStone :: String -> Stone
+strToStone s = read s :: Stone
 
-strToStone :: String -> (Int, String)
-strToStone s = intToStone (read s :: Int)
-
-processInput :: String -> [(Int, String)]
-processInput contents = map strToStone (words contents)
-
-updateStone :: Stone -> StoneUpdateCache -> UpdatedStone
-updateStone (0, _) cache = Left (1, "1")
-updateStone (n, s) cache =
-  let len = numDigits n
+updateStone :: Stone -> UpdatedStone
+updateStone 0 = Left 1
+updateStone stone =
+  let len = numDigits stone
    in if even len
         then
-          let (l, r) = splitAt (len `div` 2) s
+          let (l, r) = splitAt (len `div` 2) (show stone)
            in Right (strToStone l, strToStone r)
-        else Left (intToStone (2024 * n))
+        else Left (2024 * stone)
 
-updateStones :: [Stone] -> StoneUpdateCache -> [Stone]
-updateStones stones cache = result
+updatedStoneToList (Left n) = [n]
+updatedStoneToList (Right (a, b)) = [a, b]
+
+updateStones :: [Stone] -> [Stone]
+updateStones = foldr f []
   where
-    result = foldr f [] stones
-
     f :: Stone -> [Stone] -> [Stone]
-    f stone updatedStones = either (: updatedStones) (\(l, r) -> l : (r : updatedStones)) (updateStone stone cache)
+    f stone updatedStones = either (: updatedStones) (\(l, r) -> l : (r : updatedStones)) (updateStone stone)
 
 updateN :: Int -> Stone -> Int
-updateN n stone = updateN' 0 n [stone] empty
+updateN n stone = result
   where
+    (result, _) = updateN' 1 n [stone] Map.empty
+
+    updateN' :: Int -> Int -> [Stone] -> StoneResultCache -> (Int, StoneResultCache)
     updateN' depth maxDepth stones cache =
-      if depth < maxDepth
-        then sum (map (\s -> updateN' (depth + 1) maxDepth [s] cache) (updateStones stones cache))
-        else length stones
+      if depth <= maxDepth
+        then
+          let f :: Stone -> (Int, StoneResultCache) -> (Int, StoneResultCache)
+              f stone (sum, cache) = case Map.lookup (stone, depth) cache of
+                Just count -> (sum + count, cache)
+                Nothing ->
+                  let (result, updatedCache') = updateN' (depth + 1) maxDepth ((updatedStoneToList . updateStone) stone) cache
+                      updatedCache = Map.insert (stone, depth) result updatedCache'
+                   in (sum + result, updatedCache)
+           in foldr f (0, cache) stones
+        else
+          let result = length stones
+           in (result, Map.insert (stone, depth) result cache)
 
 updateAllN :: Int -> [Stone] -> Int
 updateAllN n stones = sum (map (updateN n) stones)
 
 part1 :: [Stone] -> Int
-part1 stones = updateAllN 25 stones -- length (foldr (\_ stones -> updateAll stones) stones [1 .. 25])
+part1 = updateAllN 25
 
 part2 :: [Stone] -> Int
-part2 stones = updateAllN 75 stones -- length (foldr (\_ stones -> updateAll stones) stones [1 .. 75])
+part2 = updateAllN 75
+
+processInput :: String -> [Stone]
+processInput contents = map strToStone (words contents)
 
 main = do
   testFile <- readFile "./test.txt"
