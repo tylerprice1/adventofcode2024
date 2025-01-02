@@ -1,7 +1,12 @@
 import Control.Parallel qualified as Parallel
+import Data.Map (Map, empty)
 import Debug.Trace (traceShow, traceShowId)
 
 type Stone = (Int, String)
+
+type UpdatedStone = Either Stone (Stone, Stone)
+
+type StoneUpdateCache = Map Stone UpdatedStone
 
 numDigits :: Int -> Int
 numDigits n
@@ -22,9 +27,9 @@ strToStone s = intToStone (read s :: Int)
 processInput :: String -> [(Int, String)]
 processInput contents = map strToStone (words contents)
 
-updateStone :: Stone -> Either Stone (Stone, Stone)
-updateStone (0, _) = Left (1, "1")
-updateStone (n, s) =
+updateStone :: Stone -> StoneUpdateCache -> UpdatedStone
+updateStone (0, _) cache = Left (1, "1")
+updateStone (n, s) cache =
   let len = numDigits n
    in if even len
         then
@@ -32,20 +37,20 @@ updateStone (n, s) =
            in Right (strToStone l, strToStone r)
         else Left (intToStone (2024 * n))
 
-updateStones :: [Stone] -> [Stone]
-updateStones stones = result
+updateStones :: [Stone] -> StoneUpdateCache -> [Stone]
+updateStones stones cache = result
   where
     result = foldr f [] stones
 
     f :: Stone -> [Stone] -> [Stone]
-    f stone updatedStones = either (: updatedStones) (\(l, r) -> l : (r : updatedStones)) (updateStone stone)
+    f stone updatedStones = either (: updatedStones) (\(l, r) -> l : (r : updatedStones)) (updateStone stone cache)
 
 updateN :: Int -> Stone -> Int
-updateN n stone = updateN' 0 n [stone]
+updateN n stone = updateN' 0 n [stone] empty
   where
-    updateN' depth maxDepth stones =
+    updateN' depth maxDepth stones cache =
       if depth < maxDepth
-        then sum (map (\s -> updateN' (depth + 1) maxDepth [s]) (updateStones stones))
+        then sum (map (\s -> updateN' (depth + 1) maxDepth [s] cache) (updateStones stones cache))
         else length stones
 
 updateAllN :: Int -> [Stone] -> Int
