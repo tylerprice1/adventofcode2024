@@ -152,4 +152,4 @@ main = do
   print (part1 input) -- Expected: 548
   putStrLn "----- Part 2 -----"
   print (part2 test) -- Expected: 81
-  print (part2 input) -- Expected: ?
+  print (part2 input) -- Expected: 1252
