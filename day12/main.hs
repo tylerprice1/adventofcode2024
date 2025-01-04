@@ -1,4 +1,4 @@
-import Data.Maybe (fromJust)
+import Data.Maybe (catMaybes, fromJust)
 import Data.Set qualified as Set
 import Data.Vector qualified as Vector
 import Debug.Trace (traceShow, traceShowId)
@@ -10,6 +10,18 @@ type Garden = Grid.Grid Char
 
 type Region = [Plot]
 
+area :: Region -> Int
+area = length
+
+perimeter :: Region -> Int
+perimeter region =
+  let set = Set.fromList region
+      plotPerimeter plot =
+        let surrounding = Grid.surrounding plot
+            edges = 4 - length surrounding
+         in edges + length (filter (\p -> not (p `Set.member` set)) surrounding)
+   in sum (map plotPerimeter region)
+
 showRegion :: Garden -> Region -> String
 showRegion garden plots =
   let plotsSet = Set.fromList plots
@@ -17,7 +29,12 @@ showRegion garden plots =
       showRow row = Vector.toList (Vector.map showPlot row) ++ "\n"
    in concatMap showRow garden
 
-part1 garden = map (showRegion garden) (getRegions garden)
+part1 garden =
+  let regions = getRegions garden
+      areas = map area regions
+      perimeters = map perimeter regions
+      products = zipWith (*) areas perimeters
+   in sum products
 
 part2 input = ""
 
@@ -27,18 +44,16 @@ getRegions garden = fst (getRegions' garden Set.empty)
     getRegions' :: Garden -> Set.Set Plot -> ([Region], Set.Set Plot)
     getRegions' garden visited =
       Vector.foldr
-        ( \row (r, v) ->
-            Vector.foldr
-              ( \curr acc ->
-                  if curr `Set.member` v
-                    then acc
-                    else
-                      let (r, v) = acc
-                          (r', v') = getRegion garden curr
-                       in (r' : r, v `Set.union` v')
-              )
-              (r, v)
-              row
+        ( flip
+            ( Vector.foldr
+                ( \curr (r, v) ->
+                    if curr `Set.member` v
+                      then (r, v)
+                      else
+                        let (r', v') = getRegion garden curr
+                         in (r' : r, v `Set.union` v')
+                )
+            )
         )
         ([], visited)
         garden
@@ -48,8 +63,8 @@ getRegion garden plot = getRegion' garden plot plot Set.empty
   where
     getRegion' :: Garden -> Plot -> Plot -> Set.Set Plot -> (Region, Set.Set Plot)
     getRegion' garden start curr visited
-      | curr `Set.member` visited = error ("Already visited: " ++ show curr ++ " " ++ show visited)
-      | Grid.value start /= Grid.value curr = ([], curr `Set.insert` visited)
+      | curr `Set.member` visited = error ("Already visited: " ++ show curr)
+      | Grid.value start /= Grid.value curr = ([], visited)
       | otherwise =
           foldr
             ( \curr (r, v) ->
@@ -60,7 +75,7 @@ getRegion garden plot = getRegion' garden plot plot Set.empty
                      in (r' ++ r, v')
             )
             ([curr], curr `Set.insert` visited)
-            (filter (\p -> not (p `Set.member` visited)) (Grid.surrounding curr))
+            (Grid.surrounding curr)
 
 processInput :: String -> Garden
 processInput contents =
@@ -72,12 +87,12 @@ main = do
   testFile <- readFile "./test.txt"
   let test = processInput testFile
 
-  -- inputFile <- readFile "./input.txt"
-  -- let input = processInput inputFile
+  inputFile <- readFile "./input.txt"
+  let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  mapM_ putStrLn (part1 test) -- Expected: ?
-  -- print (part1 input) -- Expected: ?
-  -- putStrLn "\n----- Part 2 -----"
-  -- print (part2 test) -- Expected: ?
-  -- print (part2 input) -- Expected: ?
+  print (part1 test) -- Expected: ?
+  print (part1 input) -- Expected: ?
+  putStrLn "\n----- Part 2 -----"
+  print (part2 test) -- Expected: ?
+  print (part2 input) -- Expected: ?

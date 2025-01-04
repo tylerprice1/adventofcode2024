@@ -52,7 +52,9 @@ instance (Eq a) => Eq (GridItem a) where
   (==) a b = row a == row b && column a == column b
 
 instance (Ord a) => Ord (GridItem a) where
-  (<=) a b = row a <= row b && column a <= column b
+  compare a b = case compare (row a) (row b) of
+    EQ -> compare (column a) (column b)
+    o -> o
 
 type Grid a = (Vector.Vector (Vector.Vector (GridItem a)))
 
@@ -67,7 +69,7 @@ getPosition grid (r, c) = case (Vector.!?) grid r of
   Nothing -> Nothing
   Just row -> (Vector.!?) row c
 
-fromList :: [[a]] -> Grid a
+fromList :: (Show a) => [[a]] -> Grid a
 fromList rows =
   let unlinkedNodes =
         Vector.fromList
