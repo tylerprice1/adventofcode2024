@@ -22,46 +22,48 @@ perimeter region =
          in edges + length (filter (\p -> not (p `Set.member` set)) surrounding)
    in sum (map plotPerimeter region)
 
-straightLinePerimeter :: Region -> Int
-straightLinePerimeter region =
-  let (sum, _) = foldr foldFn (0, Set.empty) edgePlots
-   in sum
+edges :: Region -> [[Plot]]
+edges region =
+  fst (edges' edgePlots Set.empty)
   where
-    foldFn plot (sum, visited) =
-      let (sum', v') = sidePerimeter plot visited
-       in (sum + sum', v')
+    edges' :: Region -> Set.Set Plot -> ([[Plot]], Set.Set Plot)
+    edges' region visited =
+      foldr
+        ( \p (edges, v) ->
+            if p `Set.member` v
+              then (edges, v)
+              else
+                let (pEdges, v') = followEdge p v
+                 in (pEdges ++ edges, v')
+        )
+        ([], visited)
+        region
 
     edgePlots = filter (not . isInternal) region
-    set = Set.fromList edgePlots
 
-    nextFns = [Grid.up, Grid.left, Grid.down, Grid.right]
+    neighborGetters = [Grid.up, Grid.left, Grid.down, Grid.right]
+    isInternal plot = all (maybe False (\i -> Grid.value i == Grid.value plot) . (\get -> get plot)) neighborGetters
 
-    isInternal plot =
-      maybe False (\i -> Grid.value i == Grid.value plot) (Grid.up plot)
-        && maybe False (\i -> Grid.value i == Grid.value plot) (Grid.left plot)
-        && maybe False (\i -> Grid.value i == Grid.value plot) (Grid.down plot)
-        && maybe False (\i -> Grid.value i == Grid.value plot) (Grid.right plot)
-
-    sidePerimeter :: Plot -> Set.Set Plot -> (Int, Set.Set Plot)
-    sidePerimeter plot visited =
-      let (sum, _, v') = foldr fn (0, plot, visited) nextFns
-       in (sum, v')
+    followEdge plot visited =
+      foldr
+        ( \get (edges, v) ->
+            let (plots, v') = follow plot get v
+             in (plots : edges, v')
+        )
+        ([], visited)
+        neighborGetters
       where
-        fn :: (Grid.GridItem Char -> Maybe (Grid.GridItem Char)) -> (Int, Plot, Set.Set Plot) -> (Int, Plot, Set.Set Plot)
-        fn getNext (sum, p, v) =
-          let (p', v') = findStraightLineEndpoint p getNext v
-           in (1 + sum, p', v')
+        follow :: Plot -> (Plot -> Maybe Plot) -> Set.Set Plot -> ([Plot], Set.Set Plot)
+        follow plot get visited =
+          let maybeNext = get plot
+           in case maybeNext of
+                Nothing -> ([], visited)
+                Just next ->
+                  let (plots, visited') = follow next get visited
+                   in (next : plots, visited')
 
-    findStraightLineEndpoint plot getNext visited
-      | plot `Set.member` visited = error "Already visited"
-      | otherwise =
-          let updatedVisited = plot `Set.insert` visited
-           in case traceShow (plot, getNext plot) getNext plot of
-                Nothing -> (plot, visited)
-                Just p ->
-                  if p `Set.member` set && not (p `Set.member` visited) && not (isInternal plot)
-                    then traceShow ("Curr", plot, "Next", p) findStraightLineEndpoint p getNext updatedVisited
-                    else (plot, visited)
+straightLinePerimeter :: Region -> Int
+straightLinePerimeter region = length (edges region)
 
 showRegion :: Garden -> Region -> String
 showRegion garden plots =
@@ -72,7 +74,7 @@ showRegion garden plots =
 
 part1 regions =
   let areas = map area regions
-      perimeters = (map perimeter regions)
+      perimeters = map perimeter regions
       products = zipWith (*) areas perimeters
    in sum products
 
