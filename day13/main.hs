@@ -18,7 +18,7 @@ data ClawMachine = ClawMachine Button Button Position
 
 isInt n = n == fromInteger (floor n) && n == fromInteger (ceiling n)
 
-toFloat n = fromIntegral n :: Float
+toDouble n = fromIntegral n :: Double
 
 play :: NumType -> NumType -> ClawMachine -> Int
 play aCost bCost (ClawMachine a b prize) =
@@ -27,7 +27,7 @@ play aCost bCost (ClawMachine a b prize) =
     xRow = [dx a, dx b, x prize]
     yRow = [dy a, dy b, y prize]
     intMatrix = Matrix.fromLists [xRow, yRow]
-    matrix = Matrix.fromLists [map toFloat xRow, map toFloat yRow]
+    matrix = Matrix.fromLists [map toDouble xRow, map toDouble yRow]
     rref = either error id (Matrix.rref matrix)
 
     aPresses = round (Matrix.getElem 1 3 rref)
@@ -38,7 +38,10 @@ play aCost bCost (ClawMachine a b prize) =
 
 part1 machines = sum (map (play 3 1) machines)
 
-part2 input = ""
+part2 machines =
+  let adjustment = 10000000000000
+      adjustedMachines = map (\(ClawMachine a b prize) -> ClawMachine a b (Position (adjustment + x prize) (adjustment + y prize))) machines
+   in part1 adjustedMachines
 
 processInput :: String -> [ClawMachine]
 processInput contents = parse (lines contents)
@@ -80,7 +83,7 @@ main = do
 
   putStrLn "\n----- Part 1 -----"
   print (part1 test) -- Expected: 480
-  print (part1 input) -- Expected: ?
-  -- putStrLn "\n----- Part 2 -----"
-  -- print (part2 test) -- Expected: ?
-  -- print (part2 input) -- Expected: ?
+  print (part1 input) -- Expected: 29023
+  putStrLn "\n----- Part 2 -----"
+  print (part2 test) -- Expected: ?
+  print (part2 input) -- Expected: ?
