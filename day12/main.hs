@@ -2,7 +2,6 @@ import Control.Exception (assert)
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, maybe)
 import Data.Set qualified as Set
 import Data.Vector qualified as Vector
-import Debug.Trace (trace, traceShow, traceShowId)
 import GHC.IO.Exception (assertError)
 import Grid qualified
 
@@ -33,65 +32,61 @@ data Side = L | T | R | B
 data Edge = Edge Side [Plot]
   deriving (Eq, Show, Ord)
 
-edges :: Region -> [Edge]
-edges region =
-  (Set.toList . Set.fromList)
-    ( foldr
-        ( \p edges ->
-            let pEdges = followEdge p
-             in {- trace ("\nPlot:  " ++ show p ++ "\nEdges: " ++ showPrettyList pEdges) -} (pEdges ++ edges)
-        )
-        []
-        region
-    )
-  where
-    edgePlots = filter (not . isInternal) region
-
-    neighborGetters = [Grid.up, Grid.left, Grid.down, Grid.right]
-    isInternal plot = all (maybe False (\i -> Grid.value i == Grid.value plot) . (\get -> get plot)) neighborGetters
-
-    follow :: Plot -> (Plot -> Maybe Plot) -> [Plot]
-    follow plot get = case get plot of
-      Nothing -> []
-      Just next
-        | Grid.value next == Grid.value plot -> next : follow next get
-        | otherwise -> []
-
-    followHorizontalEdge plot = reverse (follow plot Grid.left) ++ [plot] ++ follow plot Grid.right
-    followVerticalEdge plot = reverse (follow plot Grid.up) ++ [plot] ++ follow plot Grid.down
-
-    followEdge :: Plot -> [Edge]
-    followEdge plot =
-      if isInternal plot
-        then []
-        else
-          let l = Grid.left plot
-              r = Grid.right plot
-              u = Grid.up plot
-              d = Grid.down plot
-
-              horizontal = followHorizontalEdge plot
-              vertical = followVerticalEdge plot
-           in catMaybes
-                [ maybe (Just (Edge L vertical)) (\p -> if Grid.sameValue plot p then Nothing else Just (Edge L vertical)) l,
-                  maybe (Just (Edge T horizontal)) (\p -> if Grid.sameValue plot p then Nothing else Just (Edge T horizontal)) u,
-                  maybe (Just (Edge R vertical)) (\p -> if Grid.sameValue plot p then Nothing else Just (Edge R vertical)) l,
-                  maybe (Just (Edge B horizontal)) (\p -> if Grid.sameValue plot p then Nothing else Just (Edge B horizontal)) u
-                ]
-
 straightLinePerimeter :: Garden -> Region -> Int
-straightLinePerimeter garden region =
-  length
-    ( trace
-        ( "\nRegion: "
-            ++ showRegion garden region
-            ++ foldr
-              (\p acc -> "\nEdges:  " ++ show p ++ acc)
-              ""
-              (edges region)
-        )
-        (edges region)
-    )
+straightLinePerimeter garden region = length (regionEdges region)
+  where
+    regionEdges :: Region -> [Edge]
+    regionEdges region = (Set.toList . Set.fromList) (foldr (\p edges -> plotEdges p ++ edges) [] region)
+      where
+        plotEdges :: Plot -> [Edge]
+        plotEdges plot =
+          if isInternal plot
+            then []
+            else
+              let sameAsPlot = Grid.sameValue plot
+                  top = followHorizontalEdge T plot
+                  bottom = followHorizontalEdge B plot
+                  left = followVerticalEdge L plot
+                  right = followVerticalEdge R plot
+               in catMaybes
+                    [ maybe (Just (Edge L left)) (\l -> if sameAsPlot l then Nothing else Just (Edge L left)) (Grid.left plot),
+                      maybe (Just (Edge T top)) (\u -> if sameAsPlot u then Nothing else Just (Edge T top)) (Grid.up plot),
+                      maybe (Just (Edge R right)) (\r -> if sameAsPlot r then Nothing else Just (Edge R right)) (Grid.right plot),
+                      maybe (Just (Edge B bottom)) (\d -> if sameAsPlot d then Nothing else Just (Edge B bottom)) (Grid.down plot)
+                    ]
+          where
+            neighborGetters = [Grid.up, Grid.left, Grid.down, Grid.right]
+            isInternal plot = all (maybe False (\i -> Grid.value i == Grid.value plot) . (\get -> get plot)) neighborGetters
+
+            followWhile :: Plot -> (Plot -> Maybe Plot) -> (Plot -> Bool) -> [Plot]
+            followWhile plot get keep = maybe [] (\next -> if keep next then next : followWhile next get keep else []) (get plot)
+
+            followHorizontalEdge side plot = reverse (f plot Grid.left) ++ [plot] ++ f plot Grid.right
+              where
+                f plot get =
+                  followWhile
+                    plot
+                    get
+                    ( \p ->
+                        Grid.sameValue plot p
+                          && ( if side == T
+                                 then maybe True (\u -> not (Grid.sameValue u p)) (Grid.up p)
+                                 else maybe True (\d -> not (Grid.sameValue d p)) (Grid.down p)
+                             )
+                    )
+            followVerticalEdge side plot = reverse (f plot Grid.up) ++ [plot] ++ f plot Grid.down
+              where
+                f plot get =
+                  followWhile
+                    plot
+                    get
+                    ( \p ->
+                        Grid.sameValue plot p
+                          && ( if side == L
+                                 then maybe True (\l -> not (Grid.sameValue l p)) (Grid.left p)
+                                 else maybe True (\r -> not (Grid.sameValue r p)) (Grid.right p)
+                             )
+                    )
 
 showRegion :: Garden -> Region -> String
 showRegion garden plots =
@@ -109,7 +104,7 @@ part1 (garden, regions) =
 part2 (garden, regions) =
   let areas = map area regions
       perimeters = map (straightLinePerimeter garden) regions
-      products = zipWith (*) areas (trace (foldr (\(count, r) acc -> show count ++ "\t" ++ show r ++ "\n" ++ acc) "\n" (zip perimeters regions)) perimeters)
+      products = zipWith (*) areas perimeters
    in sum products
 
 processInput :: String -> (Garden, [Region])
@@ -165,10 +160,9 @@ main = do
   inputFile <- readFile "./input.txt"
   let input = processInput inputFile
 
-  -- putStrLn "\n----- Part 1 -----"
-  -- print (part1 test) -- Expected: ?
-  -- print (part1 input) -- Expected: ?
+  putStrLn "\n----- Part 1 -----"
+  print (part1 test) -- Expected: 1930
+  print (part1 input) -- Expected: 1387004
   putStrLn "\n----- Part 2 -----"
-  print (part2 test) -- Expected: ?
-
--- print (part2 input) -- Expected: ?
+  print (part2 test) -- Expected: 1206
+  print (part2 input) -- Expected: 844198

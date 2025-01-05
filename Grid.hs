@@ -6,14 +6,17 @@ module Grid
     Row,
     Column,
     Position,
+    Neighbor,
     fromList,
     toList,
     height,
     width,
     hasPosition,
+    maybeSurrounding,
     getPosition,
     surrounding,
     value,
+    sameValue,
     up,
     left,
     right,
@@ -34,14 +37,16 @@ type Column = Int
 
 type Position = (Row, Column)
 
+type Neighbor a = Maybe (GridItem a)
+
 data GridItem a = GridItem
   { value :: a,
     row :: Int,
     column :: Int,
-    up :: Maybe (GridItem a),
-    left :: Maybe (GridItem a),
-    right :: Maybe (GridItem a),
-    down :: Maybe (GridItem a)
+    up :: Neighbor a,
+    left :: Neighbor a,
+    right :: Neighbor a,
+    down :: Neighbor a
   }
 
 instance (Show a) => Show (GridItem a) where
@@ -120,5 +125,10 @@ height = Vector.length
 width :: Grid a -> Int
 width = Vector.length . Vector.head
 
+maybeSurrounding :: GridItem a -> [Maybe (GridItem a)]
+maybeSurrounding i = [left i, up i, right i, down i]
+
 surrounding :: GridItem a -> [GridItem a]
-surrounding i = catMaybes [left i, up i, right i, down i]
+surrounding = catMaybes . maybeSurrounding
+
+sameValue a b = value a == value b
