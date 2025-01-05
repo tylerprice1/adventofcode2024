@@ -79,12 +79,12 @@ edges region =
                   maybe (Just (Edge B horizontal)) (\p -> if Grid.sameValue plot p then Nothing else Just (Edge B horizontal)) u
                 ]
 
-straightLinePerimeter :: Region -> Int
-straightLinePerimeter region =
+straightLinePerimeter :: Garden -> Region -> Int
+straightLinePerimeter garden region =
   length
     ( trace
         ( "\nRegion: "
-            ++ show region
+            ++ showRegion garden region
             ++ foldr
               (\p acc -> "\nEdges:  " ++ show p ++ acc)
               ""
@@ -100,24 +100,24 @@ showRegion garden plots =
       showRow row = Vector.toList (Vector.map showPlot row) ++ "\n"
    in concatMap showRow garden
 
-part1 regions =
+part1 (garden, regions) =
   let areas = map area regions
       perimeters = map perimeter regions
       products = zipWith (*) areas perimeters
    in sum products
 
-part2 regions =
+part2 (garden, regions) =
   let areas = map area regions
-      perimeters = map straightLinePerimeter regions
+      perimeters = map (straightLinePerimeter garden) regions
       products = zipWith (*) areas (trace (foldr (\(count, r) acc -> show count ++ "\t" ++ show r ++ "\n" ++ acc) "\n" (zip perimeters regions)) perimeters)
    in sum products
 
-processInput :: String -> [Region]
+processInput :: String -> (Garden, [Region])
 processInput contents =
   let garden = Grid.fromList (lines contents)
       first = fromJust (Grid.getPosition garden (0, 4))
       regions = getRegions garden
-   in regions
+   in (garden, regions)
   where
     getRegions :: Garden -> [Region]
     getRegions garden = fst (getRegions' garden Set.empty)
