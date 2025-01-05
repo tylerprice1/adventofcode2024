@@ -1,7 +1,9 @@
-import Data.Maybe (catMaybes, fromJust, fromMaybe, maybe)
+import Control.Exception (assert)
+import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, maybe)
 import Data.Set qualified as Set
 import Data.Vector qualified as Vector
 import Debug.Trace (trace, traceShow, traceShowId)
+import GHC.IO.Exception (assertError)
 import Grid qualified
 
 type Plot = Grid.GridItem Char
@@ -13,57 +15,83 @@ type Region = [Plot]
 area :: Region -> Int
 area = length
 
+plotPerimeter :: (Eq a) => Grid.GridItem a -> Int
+plotPerimeter plot = length (filter (maybe True (\p -> Grid.value p /= Grid.value plot)) (Grid.maybeSurrounding plot))
+
+showPrettyList :: (Show a) => [a] -> String
+showPrettyList [] = "[]"
+showPrettyList l = "[\n" ++ foldr (\el str -> "\t" ++ show el ++ "\n" ++ str) "" l ++ "]"
+
 perimeter :: Region -> Int
 perimeter region =
   let set = Set.fromList region
-      plotPerimeter plot =
-        let surrounding = Grid.surrounding plot
-            edges = 4 - length surrounding
-         in edges + length (filter (\p -> not (p `Set.member` set)) surrounding)
    in sum (map plotPerimeter region)
 
-edges :: Region -> [[Plot]]
-edges region =
-  fst (edges' edgePlots Set.empty)
-  where
-    edges' :: Region -> Set.Set Plot -> ([[Plot]], Set.Set Plot)
-    edges' region visited =
-      foldr
-        ( \p (edges, v) ->
-            if p `Set.member` v
-              then (edges, v)
-              else
-                let (pEdges, v') = followEdge p v
-                 in (pEdges ++ edges, v')
-        )
-        ([], visited)
-        region
+data Side = L | T | R | B
+  deriving (Eq, Show, Ord)
 
+data Edge = Edge Side [Plot]
+  deriving (Eq, Show, Ord)
+
+edges :: Region -> [Edge]
+edges region =
+  (Set.toList . Set.fromList)
+    ( foldr
+        ( \p edges ->
+            let pEdges = followEdge p
+             in {- trace ("\nPlot:  " ++ show p ++ "\nEdges: " ++ showPrettyList pEdges) -} (pEdges ++ edges)
+        )
+        []
+        region
+    )
+  where
     edgePlots = filter (not . isInternal) region
 
     neighborGetters = [Grid.up, Grid.left, Grid.down, Grid.right]
     isInternal plot = all (maybe False (\i -> Grid.value i == Grid.value plot) . (\get -> get plot)) neighborGetters
 
-    followEdge plot visited =
-      foldr
-        ( \get (edges, v) ->
-            let (plots, v') = follow plot get v
-             in (plots : edges, v')
-        )
-        ([], visited)
-        neighborGetters
-      where
-        follow :: Plot -> (Plot -> Maybe Plot) -> Set.Set Plot -> ([Plot], Set.Set Plot)
-        follow plot get visited =
-          let maybeNext = get plot
-           in case maybeNext of
-                Nothing -> ([], visited)
-                Just next ->
-                  let (plots, visited') = follow next get visited
-                   in (next : plots, visited')
+    follow :: Plot -> (Plot -> Maybe Plot) -> [Plot]
+    follow plot get = case get plot of
+      Nothing -> []
+      Just next
+        | Grid.value next == Grid.value plot -> next : follow next get
+        | otherwise -> []
+
+    followHorizontalEdge plot = reverse (follow plot Grid.left) ++ [plot] ++ follow plot Grid.right
+    followVerticalEdge plot = reverse (follow plot Grid.up) ++ [plot] ++ follow plot Grid.down
+
+    followEdge :: Plot -> [Edge]
+    followEdge plot =
+      if isInternal plot
+        then []
+        else
+          let l = Grid.left plot
+              r = Grid.right plot
+              u = Grid.up plot
+              d = Grid.down plot
+
+              horizontal = followHorizontalEdge plot
+              vertical = followVerticalEdge plot
+           in catMaybes
+                [ maybe (Just (Edge L vertical)) (\p -> if Grid.sameValue plot p then Nothing else Just (Edge L vertical)) l,
+                  maybe (Just (Edge T horizontal)) (\p -> if Grid.sameValue plot p then Nothing else Just (Edge T horizontal)) u,
+                  maybe (Just (Edge R vertical)) (\p -> if Grid.sameValue plot p then Nothing else Just (Edge R vertical)) l,
+                  maybe (Just (Edge B horizontal)) (\p -> if Grid.sameValue plot p then Nothing else Just (Edge B horizontal)) u
+                ]
 
 straightLinePerimeter :: Region -> Int
-straightLinePerimeter region = length (edges region)
+straightLinePerimeter region =
+  length
+    ( trace
+        ( "\nRegion: "
+            ++ show region
+            ++ foldr
+              (\p acc -> "\nEdges:  " ++ show p ++ acc)
+              ""
+              (edges region)
+        )
+        (edges region)
+    )
 
 showRegion :: Garden -> Region -> String
 showRegion garden plots =
@@ -81,7 +109,7 @@ part1 regions =
 part2 regions =
   let areas = map area regions
       perimeters = map straightLinePerimeter regions
-      products = zipWith (*) areas (trace ("\nPerimeters:" ++ foldr (\r acc -> show r ++ "\n" ++ acc) "\n" (zip perimeters regions)) perimeters)
+      products = zipWith (*) areas (trace (foldr (\(count, r) acc -> show count ++ "\t" ++ show r ++ "\n" ++ acc) "\n" (zip perimeters regions)) perimeters)
    in sum products
 
 processInput :: String -> [Region]
@@ -142,4 +170,5 @@ main = do
   -- print (part1 input) -- Expected: ?
   putStrLn "\n----- Part 2 -----"
   print (part2 test) -- Expected: ?
-  -- print (part2 input) -- Expected: ?
+
+-- print (part2 input) -- Expected: ?
