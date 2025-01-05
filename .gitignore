@@ -131,3 +131,6 @@ dist
 
 # Haskell
 dist-newstyle
+
+# Other
+debug.txt
