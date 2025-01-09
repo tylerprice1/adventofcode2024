@@ -6,37 +6,43 @@ import GHC.Base (maxInt)
 import Text.Read (readMaybe)
 
 newtype X = X Int
-  deriving (Eq, Ord)
+
+instance Ord X where
+  compare (X a) (X b) = a `compare` b
+  (<) (X a) (X b) = a < b
+  (<=) (X a) (X b) = a <= b
+  (>) (X a) (X b) = a > b
+  (>=) (X a) (X b) = a >= b
+  max (X a) (X b) = X (a `max` b)
+  min (X a) (X b) = X (a `min` b)
+
+instance Eq X where
+  (==) (X a) (X b) = a == b
+  (/=) (X a) (X b) = a /= b
 
 instance Show X where
   show (X x) = show x
-
-instance Num X where
-  (+) (X a) (X b) = X (a + b)
-  (-) (X a) (X b) = X (a - b)
-  (*) (X a) (X b) = X (a * b)
-  negate (X a) = X (-a)
-  abs (X a) = X (abs a)
-  signum (X a) = X (signum a)
-  fromInteger n = X (fromInteger n)
 
 newtype Width = Width X
   deriving (Eq, Ord, Show)
 
 newtype Y = Y Int
-  deriving (Eq, Ord)
+
+instance Ord Y where
+  compare (Y a) (Y b) = a `compare` b
+  (<) (Y a) (Y b) = a < b
+  (<=) (Y a) (Y b) = a <= b
+  (>) (Y a) (Y b) = a > b
+  (>=) (Y a) (Y b) = a >= b
+  max (Y a) (Y b) = Y (a `max` b)
+  min (Y a) (Y b) = Y (a `min` b)
+
+instance Eq Y where
+  (==) (Y a) (Y b) = a == b
+  (/=) (Y a) (Y b) = a /= b
 
 instance Show Y where
   show (Y y) = show y
-
-instance Num Y where
-  (+) (Y a) (Y b) = Y (a + b)
-  (-) (Y a) (Y b) = Y (a - b)
-  (*) (Y a) (Y b) = Y (a * b)
-  negate (Y a) = Y (-a)
-  abs (Y a) = Y (abs a)
-  signum (Y a) = Y (signum a)
-  fromInteger n = Y (fromInteger n)
 
 newtype Height = Height Y
   deriving (Eq, Ord, Show)
@@ -144,34 +150,27 @@ instance Show Maze where
       ""
       [1 .. height]
 
-explore :: Maze -> [Position] -> Int -> Int -> Int -> (Int, [[Position]])
+explore :: Maze -> Set.Set Position -> Int -> Int -> Int -> Int
 explore maze path score minScore depth =
   let p = position maze
-      (Position (X x) (Y y) orientation') = p -- trace (replicate depth ' ' ++ show p) p -- (trace (show p ++ "\n" ++ show (walls maze) ++ "\n" ++ show maze) p)
-      orientation = fromJust orientation'
-      path' = p : path
-      turnedScore = 1000 + score
-      forwardScore = 1 + score
-      depth' = depth + 1
-      (minScore', forwardResult) = explore (forward p `updatePosition` maze) path' forwardScore minScore depth'
-      (minScore'', counterclockwiseResult) = explore (counterclockwise p `updatePosition` maze) path' turnedScore minScore' depth'
-      (minScore''', clockwiseResult) = explore (clockwise p `updatePosition` maze) path' turnedScore minScore'' depth'
-   in if x <= 0 || y <= 0
-        then error "Invalid position"
-        else
-          if p `Set.member` walls maze || p `elem` path || score >= minScore
-            then (minScore, [])
-            else
-              if p == end maze
-                then (min minScore score, [path'])
-                else
-                  (minScore''', forwardResult ++ counterclockwiseResult ++ clockwiseResult)
+      path' = p `Set.insert` path
+      result
+        | p == end maze = min minScore score
+        | p `Set.member` walls maze || p `Set.member` path || score >= minScore = minScore
+        | otherwise =
+            let turnedScore = 1000 + score
+                forwardScore = 1 + score
+                depth' = depth + 1
+                minScore' = explore (forward p `updatePosition` maze) path' forwardScore minScore depth'
+                minScore'' = explore (clockwise p `updatePosition` maze) path' turnedScore minScore' depth'
+                minScore''' = explore (counterclockwise p `updatePosition` maze) path' turnedScore minScore'' depth'
+             in minScore'''
+   in result
 
 part1 input =
   let (Position (X sx) (Y sy) _) = start input
       (Position (X ex) (Y ey) _) = end input
-      (score, result) = explore input [] 0 (1000 * (abs (ey - sy) + abs (ex - sx))) 0
-      lengths = map length result
+      score = explore input Set.empty 0 (1000 * (abs (ey - sy) + abs (ex - sx))) 0
    in score
 
 part2 input = input
