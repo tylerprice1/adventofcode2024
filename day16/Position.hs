@@ -1,16 +1,24 @@
 module Position where
 
 import Data.Maybe (fromJust, isNothing)
+import GHC.Generics (Generic)
 
-newtype X = X Int deriving (Eq, Ord, Num, Show)
+newtype X = X Int deriving (Eq, Generic, Ord, Num, Show)
 
 newtype Width = Width X deriving (Eq, Ord, Show)
 
-newtype Y = Y Int deriving (Eq, Ord, Num, Show)
+newtype Y = Y Int deriving (Eq, Generic, Ord, Num, Show)
 
 newtype Height = Height Y deriving (Eq, Ord, Show)
 
-data Direction = North | South | East | West deriving (Eq, Ord)
+data Direction = North | South | East | West
+  deriving (Eq, Generic, Ord)
+
+instance Show Direction where
+  show North = "^"
+  show South = "v"
+  show East = ">"
+  show West = "<"
 
 clockwise :: Direction -> Direction
 clockwise North = East
@@ -24,17 +32,11 @@ counterclockwise West = South
 counterclockwise South = East
 counterclockwise East = North
 
-instance Show Direction where
-  show North = "^"
-  show South = "v"
-  show East = ">"
-  show West = "<"
-
 data Action = Forward | Clockwise | Counterclockwise
   deriving (Eq, Ord, Show)
 
-data Position
-  = Position {getX :: X, getY :: Y, getOrientation :: Maybe Direction}
+data Position = Position {getX :: !X, getY :: !Y, getOrientation :: !(Maybe Direction)}
+  deriving (Generic)
 
 setOrientation :: Position -> Maybe Direction -> Position
 setOrientation (Position x y _) = Position x y
