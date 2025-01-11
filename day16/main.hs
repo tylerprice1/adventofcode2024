@@ -1,48 +1,26 @@
-import Data.List (sort)
-import Data.Maybe (fromJust, isJust)
+import Control.Parallel (par, pseq)
+import Data.Maybe (fromJust, fromMaybe, isJust, isNothing)
 import Data.Set qualified as Set
-import Debug.Trace (trace, traceShow, traceShowId)
+-- import Debug.Trace (trace)
 import GHC.Base (maxInt)
-import Text.Read (readMaybe)
+
+trace _ a = a
+
+min3 :: (Ord a) => a -> a -> a -> a
+{-# SPECIALIZE min3 :: Score -> Score -> Score -> Score #-}
+min3 a b c = min a (min b c)
+
+newtype Score = Score Int
+  deriving (Eq, Ord, Num, Show)
 
 newtype X = X Int
-
-instance Ord X where
-  compare (X a) (X b) = a `compare` b
-  (<) (X a) (X b) = a < b
-  (<=) (X a) (X b) = a <= b
-  (>) (X a) (X b) = a > b
-  (>=) (X a) (X b) = a >= b
-  max (X a) (X b) = X (a `max` b)
-  min (X a) (X b) = X (a `min` b)
-
-instance Eq X where
-  (==) (X a) (X b) = a == b
-  (/=) (X a) (X b) = a /= b
-
-instance Show X where
-  show (X x) = show x
+  deriving (Eq, Ord, Num, Show)
 
 newtype Width = Width X
   deriving (Eq, Ord, Show)
 
 newtype Y = Y Int
-
-instance Ord Y where
-  compare (Y a) (Y b) = a `compare` b
-  (<) (Y a) (Y b) = a < b
-  (<=) (Y a) (Y b) = a <= b
-  (>) (Y a) (Y b) = a > b
-  (>=) (Y a) (Y b) = a >= b
-  max (Y a) (Y b) = Y (a `max` b)
-  min (Y a) (Y b) = Y (a `min` b)
-
-instance Eq Y where
-  (==) (Y a) (Y b) = a == b
-  (/=) (Y a) (Y b) = a /= b
-
-instance Show Y where
-  show (Y y) = show y
+  deriving (Eq, Ord, Num, Show)
 
 newtype Height = Height Y
   deriving (Eq, Ord, Show)
@@ -71,46 +49,54 @@ instance Ord Position where
     other -> other
 
 instance Show Position where
-  show (Position (X x) (Y y) Nothing) = "(" ++ show x ++ ", " ++ show y ++ ")"
-  show (Position (X x) (Y y) (Just o)) = "(" ++ show x ++ ", " ++ show y ++ ", " ++ show o ++ ")"
-
-updateX x (Position _ y o) = Position x y o
-
-updateY y (Position x _ o) = Position x y o
+  show (Position x y o) =
+    "("
+      ++ show x
+      ++ ", "
+      ++ show y
+      ++ ( case o of
+             Nothing -> ""
+             Just o -> ", " ++ show o
+         )
+      ++ ")"
 
 updateOrientation o (Position x y _) = Position x y o
 
 instance Eq Position where
-  (==) (Position (X x1) (Y y1) Nothing) (Position (X x2) (Y y2) Nothing) = x1 == x2 && y1 == y2
-  (==) (Position (X x1) (Y y1) Nothing) (Position (X x2) (Y y2) (Just _)) = x1 == x2 && y1 == y2
-  (==) (Position (X x1) (Y y1) (Just _)) (Position (X x2) (Y y2) Nothing) = x1 == x2 && y1 == y2
-  (==) (Position (X x1) (Y y1) (Just o1)) (Position (X x2) (Y y2) (Just o2)) = x1 == x2 && y1 == y2 && o1 == o2
+  (==) (Position x1 y1 o1) (Position x2 y2 o2) = x1 == x2 && y1 == y2 && (isNothing o1 || isNothing o2 || o1 == o2)
 
 data Maze = Maze
-  { width :: Width,
-    height :: Height,
-    position :: Position,
-    start :: Position,
-    end :: Position,
-    walls :: Set.Set Position
+  { getWidth :: Width,
+    getHeight :: Height,
+    getPosition :: Position,
+    getStart :: Position,
+    getEnd :: Position,
+    getWalls :: Set.Set Position
   }
 
-updatePosition position (Maze width height _ start end walls) = Maze width height position start end walls
+setPosition :: Position -> Maze -> Maze
+setPosition position (Maze width height _ start end walls) = Maze width height position start end walls
 
-north (Position x (Y y) _) = Position x (Y (y - 1)) (Just North)
+north :: Position -> Position
+north (Position x y _) = Position x (y - 1) (Just North)
 
-south (Position x (Y y) _) = Position x (Y (y + 1)) (Just South)
+south :: Position -> Position
+south (Position x y _) = Position x (y + 1) (Just South)
 
-west (Position (X x) y _) = Position (X (x - 1)) y (Just West)
+west :: Position -> Position
+west (Position x y _) = Position (x - 1) y (Just West)
 
-east (Position (X x) y _) = Position (X (x + 1)) y (Just East)
+east :: Position -> Position
+east (Position x y _) = Position (x + 1) y (Just East)
 
+forward :: Position -> Position
 forward p = case fromJust (orientation p) of
   North -> north p
   East -> east p
   South -> south p
   West -> west p
 
+clockwise :: Position -> Position
 clockwise p = case orientation p of
   Nothing -> error "No orientation"
   Just North -> Just East `updateOrientation` p
@@ -118,6 +104,7 @@ clockwise p = case orientation p of
   Just South -> Just West `updateOrientation` p
   Just West -> Just North `updateOrientation` p
 
+counterclockwise :: Position -> Position
 counterclockwise p = case orientation p of
   Nothing -> error "No orientation"
   Just North -> Just West `updateOrientation` p
@@ -150,33 +137,81 @@ instance Show Maze where
       ""
       [1 .. height]
 
-explore :: Maze -> Set.Set Position -> Int -> Int -> Int -> Int
+newtype Path = Path {getSet :: Set.Set Position}
+  deriving (Show)
+
+unionPath :: Path -> Path -> Path
+unionPath a b = Path (getSet a `Set.union` getSet b)
+
+data Result = Result {getScore :: Maybe Score, getPath :: Path}
+  deriving (Show)
+
+processResults :: Score -> Result -> Result -> Result -> Result
+processResults minScore f cw ccw = f `processPair` cw `processPair` ccw
+  where
+    processPair :: Result -> Result -> Result
+    processPair a b = case (a, b) of
+      (Result Nothing aPath, Result Nothing bPath) -> Result Nothing (aPath `unionPath` bPath)
+      (Result score aPath, Result Nothing bPath) -> Result score bPath
+      (Result Nothing aPath, Result score bPath) -> Result score aPath
+      (Result (Just aScore) aPath, Result (Just bScore) bPath)
+        | aScore >= minScore && bScore >= minScore -> Result Nothing (aPath `unionPath` bPath)
+        | aScore >= minScore -> Result (Just bScore) aPath
+        | bScore >= minScore -> Result (Just aScore) bPath
+        | aScore <= bScore -> Result (Just aScore) bPath
+        | otherwise -> Result (Just bScore) aPath
+
+explore :: Maze -> Path -> Score -> Score -> Int -> Result
 explore maze path score minScore depth =
-  let p = position maze
-      path' = p `Set.insert` path
+  let p = getPosition maze
+      depthStr = replicate depth '\t'
+      path' = Path (p `Set.insert` getSet path)
       result
-        | p == end maze = min minScore score
-        | p `Set.member` walls maze || p `Set.member` path || score >= minScore = minScore
+        | p == getEnd maze = trace (depthStr ++ "END: " ++ show score) (Result (if score < minScore then Just score else Nothing) path')
+        | score >= minScore = trace (depthStr ++ "WORSE: " ++ show p ++ " " ++ show score) (Result Nothing path')
+        | p `Set.member` getWalls maze = trace (depthStr ++ "WALL: " ++ show p ++ " " ++ show score) (Result Nothing path')
+        | p `Set.member` getSet path = trace (depthStr ++ "VISITED: " ++ show p ++ " " ++ show score) (Result Nothing path')
         | otherwise =
             let turnedScore = 1000 + score
                 forwardScore = 1 + score
                 depth' = depth + 1
-                minScore' = explore (forward p `updatePosition` maze) path' forwardScore minScore depth'
-                minScore'' = explore (clockwise p `updatePosition` maze) path' turnedScore minScore' depth'
-                minScore''' = explore (counterclockwise p `updatePosition` maze) path' turnedScore minScore'' depth'
-             in minScore'''
+                fPosition = forward p `setPosition` maze
+                cwPosition = clockwise p `setPosition` maze
+                ccwPosition = counterclockwise p `setPosition` maze
+
+                fTrace = depthStr ++ "FRWD: " ++ show p ++ " -> " ++ show (forward p) ++ " " ++ show score ++ " -> " ++ show forwardScore
+                cwTrace = depthStr ++ "CW:   " ++ show p ++ " -> " ++ show (clockwise p) ++ " " ++ show score ++ " -> " ++ show turnedScore
+                ccwTrace = depthStr ++ "CCW:  " ++ show p ++ " -> " ++ show (counterclockwise p) ++ " " ++ show score ++ " -> " ++ show turnedScore
+
+                fResult = explore fPosition path' forwardScore minScore depth'
+                cwResult = explore cwPosition path' turnedScore minScore depth'
+                ccwResult = explore ccwPosition path' turnedScore minScore depth'
+             in -- fResult = case explore fPosition path' forwardScore minScore depth' of
+                --   Left r -> r
+                --   Right (f, cw, ccw) -> processResults minScore f cw ccw
+
+                -- cwResult = case explore cwPosition path' turnedScore minScore depth' of
+                --   Left r -> r
+                --   Right (f, cw, ccw) -> processResults minScore f cw ccw
+
+                -- ccwResult = case explore ccwPosition path' turnedScore minScore depth' of
+                --   Left r -> r
+                --   Right (f, cw, ccw) -> processResults minScore f cw ccw
+                processResults minScore fResult cwResult ccwResult
    in result
 
+part1 :: Maze -> Result
 part1 input =
-  let (Position (X sx) (Y sy) _) = start input
-      (Position (X ex) (Y ey) _) = end input
-      score = explore input Set.empty 0 (1000 * (abs (ey - sy) + abs (ex - sx))) 0
-   in score
+  let (Position (X sx) (Y sy) _) = getStart input
+      (Position (X ex) (Y ey) _) = getEnd input
+      result = explore input (Path Set.empty) 0 (Score (1000 * (abs (ey - sy) + abs (ex - sx)))) 0
+   in result
 
+part2 :: Maze -> Maze
 part2 input = input
 
 processInput :: String -> Maze
-processInput contents = Position startX startY (Just East) `updatePosition` maze
+processInput contents = Position startX startY (Just East) `setPosition` maze
   where
     lns = lines contents
     height = length lns
@@ -200,8 +235,9 @@ processInput contents = Position startX startY (Just East) `updatePosition` maze
         )
         (Maze (Width (X width)) (Height (Y height)) defaultPosition defaultPosition defaultPosition Set.empty)
         (zip lns [1 ..])
-    (Position startX startY _) = start maze
+    (Position startX startY _) = getStart maze
 
+main :: IO ()
 main = do
   testFile <- readFile "./test.txt"
   let test = processInput testFile
@@ -211,7 +247,7 @@ main = do
 
   putStrLn "\n----- Part 1 -----"
   print (part1 test) -- Expected: 7036
-  print (part1 input) -- Expected: ?
+  -- print (part1 input) -- Expected: ?
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
   -- print (part2 input) -- Expected: ?

@@ -131,6 +131,9 @@ dist
 
 # Haskell
 dist-newstyle
+**/main
+**/*.hi
+**/*.o
 
 # Other
 debug.txt
