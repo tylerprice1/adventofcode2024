@@ -1,7 +1,10 @@
+-- import Debug.Trace (trace)
+
+import Control.Applicative ((<|>))
 import Control.Parallel (par, pseq)
+import Data.Map qualified as Map
 import Data.Maybe (fromJust, fromMaybe, isJust, isNothing)
 import Data.Set qualified as Set
--- import Debug.Trace (trace)
 import GHC.Base (maxInt)
 
 trace _ a = a
@@ -137,72 +140,68 @@ instance Show Maze where
       ""
       [1 .. height]
 
-newtype Path = Path {getSet :: Set.Set Position}
-  deriving (Show)
+data Action = Forward | Clockwise | Counterclockwise
 
-unionPath :: Path -> Path -> Path
-unionPath a b = Path (getSet a `Set.union` getSet b)
+data Path = Path
+  { getMaze :: Maze,
+    getScore :: Score,
+    getVisited :: Set.Set Position
+  }
 
-data Result = Result {getScore :: Maybe Score, getPath :: Path}
-  deriving (Show)
+instance Show Path where
+  show (Path maze score visited) =
+    show score
+      ++ "\n"
+      ++ foldr
+        ( \y s ->
+            foldr
+              ( \x s ->
+                  ( let p = Position (X x) (Y y) Nothing
+                        ch
+                          | p == start = 'S'
+                          | p == end = 'E'
+                          | p `Map.member` visitedMap = maybe 'O' (head . show) ((orientation . fromJust) (p `Map.lookup` visitedMap))
+                          | p `Set.member` walls = '#'
+                          | otherwise = '.'
+                     in ch
+                  )
+                    : s
+              )
+              ""
+              [1 .. width]
+              ++ "\n"
+              ++ s
+        )
+        ""
+        [1 .. height]
+    where
+      Maze (Width (X width)) (Height (Y height)) position start end walls = maze
+      visitedMap = Map.fromList (map (\p -> (Position (x p) (y p) Nothing, p)) (Set.elems visited))
 
-processResults :: Score -> Result -> Result -> Result -> Result
-processResults minScore f cw ccw = f `processPair` cw `processPair` ccw
+move (Path maze score visited) action = case action of
+  Forward -> Path (forward position `setPosition` maze) (score + 1) newVisited
+  Clockwise -> Path (clockwise position `setPosition` maze) (score + 1000) newVisited
+  Counterclockwise -> Path (counterclockwise position `setPosition` maze) (score + 1000) newVisited
   where
-    processPair :: Result -> Result -> Result
-    processPair a b = case (a, b) of
-      (Result Nothing aPath, Result Nothing bPath) -> Result Nothing (aPath `unionPath` bPath)
-      (Result score aPath, Result Nothing bPath) -> Result score bPath
-      (Result Nothing aPath, Result score bPath) -> Result score aPath
-      (Result (Just aScore) aPath, Result (Just bScore) bPath)
-        | aScore >= minScore && bScore >= minScore -> Result Nothing (aPath `unionPath` bPath)
-        | aScore >= minScore || aScore >= bScore -> Result (Just bScore) aPath
-        | otherwise -> Result (Just aScore) bPath
+    position = getPosition maze
+    newVisited = position `Set.insert` visited
 
-explore :: Maze -> Path -> Score -> Score -> Int -> Result
-explore maze path score minScore depth =
-  let p = getPosition maze
-      depthStr = replicate depth '\t'
-      path' = Path (p `Set.insert` getSet path)
-      result
-        | p == getEnd maze = trace (depthStr ++ "END: " ++ show score) (Result (if score < minScore then Just score else Nothing) path')
-        | score >= minScore = trace (depthStr ++ "WORSE: " ++ show p ++ " " ++ show score) (Result Nothing path')
-        | p `Set.member` getWalls maze = trace (depthStr ++ "WALL: " ++ show p ++ " " ++ show score) (Result Nothing path')
-        | p `Set.member` getSet path = trace (depthStr ++ "VISITED: " ++ show p ++ " " ++ show score) (Result Nothing path')
-        | otherwise =
-            let turnedScore = 1000 + score
-                forwardScore = 1 + score
-                depth' = depth + 1
-                fPosition = forward p `setPosition` maze
-                cwPosition = clockwise p `setPosition` maze
-                ccwPosition = counterclockwise p `setPosition` maze
+explore maze = explore' (Path maze 0 Set.empty)
+  where
+    explore' :: Path -> Maybe Path
+    explore' path
+      | position == getEnd maze = Just path
+      | position `Set.member` getWalls maze = Nothing
+      | position `Set.member` getVisited path = Nothing
+      | otherwise = explore' (path `move` Forward) <|> explore' (path `move` Clockwise) <|> explore' (path `move` Counterclockwise)
+      where
+        maze = getMaze path
+        position = getPosition maze
 
-                fTrace = depthStr ++ "FRWD: " ++ show p ++ " -> " ++ show (forward p) ++ " " ++ show score ++ " -> " ++ show forwardScore
-                cwTrace = depthStr ++ "CW:   " ++ show p ++ " -> " ++ show (clockwise p) ++ " " ++ show score ++ " -> " ++ show turnedScore
-                ccwTrace = depthStr ++ "CCW:  " ++ show p ++ " -> " ++ show (counterclockwise p) ++ " " ++ show score ++ " -> " ++ show turnedScore
-
-                fResult = explore fPosition path' forwardScore minScore depth'
-                cwResult = explore cwPosition path' turnedScore minScore depth'
-                ccwResult = explore ccwPosition path' turnedScore minScore depth'
-             in -- fResult = case explore fPosition path' forwardScore minScore depth' of
-                --   Left r -> r
-                --   Right (f, cw, ccw) -> processResults minScore f cw ccw
-
-                -- cwResult = case explore cwPosition path' turnedScore minScore depth' of
-                --   Left r -> r
-                --   Right (f, cw, ccw) -> processResults minScore f cw ccw
-
-                -- ccwResult = case explore ccwPosition path' turnedScore minScore depth' of
-                --   Left r -> r
-                --   Right (f, cw, ccw) -> processResults minScore f cw ccw
-                processResults minScore fResult cwResult ccwResult
-   in result
-
-part1 :: Maze -> Result
 part1 input =
   let (Position (X sx) (Y sy) _) = getStart input
       (Position (X ex) (Y ey) _) = getEnd input
-      result = explore input (Path Set.empty) 0 (Score (1000 * (abs (ey - sy) + abs (ex - sx)))) 0
+      result = explore input
    in result
 
 part2 :: Maze -> Maze
