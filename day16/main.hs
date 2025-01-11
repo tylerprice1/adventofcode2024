@@ -156,10 +156,8 @@ processResults minScore f cw ccw = f `processPair` cw `processPair` ccw
       (Result Nothing aPath, Result score bPath) -> Result score aPath
       (Result (Just aScore) aPath, Result (Just bScore) bPath)
         | aScore >= minScore && bScore >= minScore -> Result Nothing (aPath `unionPath` bPath)
-        | aScore >= minScore -> Result (Just bScore) aPath
-        | bScore >= minScore -> Result (Just aScore) bPath
-        | aScore <= bScore -> Result (Just aScore) bPath
-        | otherwise -> Result (Just bScore) aPath
+        | aScore >= minScore || aScore >= bScore -> Result (Just bScore) aPath
+        | otherwise -> Result (Just aScore) bPath
 
 explore :: Maze -> Path -> Score -> Score -> Int -> Result
 explore maze path score minScore depth =
