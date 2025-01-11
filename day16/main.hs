@@ -1,13 +1,17 @@
 -- import Debug.Trace (trace)
 
 import Control.Applicative ((<|>))
+import Control.DeepSeq (deepseq)
 import Control.Parallel (par, pseq)
+import Control.Parallel.Strategies (NFData, parTraversable, rdeepseq, rpar, using)
+import Data.Function (on)
+import Data.List (minimumBy)
 import Data.Map qualified as Map
-import Data.Maybe (fromJust, fromMaybe, isJust, isNothing)
+import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, isNothing)
 import Data.Set qualified as Set
+import Debug.Trace (traceShow)
 import GHC.Base (maxInt)
-
-trace _ a = a
+import GHC.Generics (Generic)
 
 min3 :: (Ord a) => a -> a -> a -> a
 {-# SPECIALIZE min3 :: Score -> Score -> Score -> Score #-}
@@ -63,7 +67,8 @@ instance Show Position where
          )
       ++ ")"
 
-updateOrientation o (Position x y _) = Position x y o
+setOrientation :: Maybe Orientation -> Position -> Position
+setOrientation o (Position x y _) = Position x y o
 
 instance Eq Position where
   (==) (Position x1 y1 o1) (Position x2 y2 o2) = x1 == x2 && y1 == y2 && (isNothing o1 || isNothing o2 || o1 == o2)
@@ -102,18 +107,18 @@ forward p = case fromJust (orientation p) of
 clockwise :: Position -> Position
 clockwise p = case orientation p of
   Nothing -> error "No orientation"
-  Just North -> Just East `updateOrientation` p
-  Just East -> Just South `updateOrientation` p
-  Just South -> Just West `updateOrientation` p
-  Just West -> Just North `updateOrientation` p
+  Just North -> Just East `setOrientation` p
+  Just East -> Just South `setOrientation` p
+  Just South -> Just West `setOrientation` p
+  Just West -> Just North `setOrientation` p
 
 counterclockwise :: Position -> Position
 counterclockwise p = case orientation p of
   Nothing -> error "No orientation"
-  Just North -> Just West `updateOrientation` p
-  Just West -> Just South `updateOrientation` p
-  Just South -> Just East `updateOrientation` p
-  Just East -> Just North `updateOrientation` p
+  Just North -> Just West `setOrientation` p
+  Just West -> Just South `setOrientation` p
+  Just South -> Just East `setOrientation` p
+  Just East -> Just North `setOrientation` p
 
 instance Show Maze where
   show (Maze (Width (X width)) (Height (Y height)) position start end walls) =
@@ -192,11 +197,14 @@ explore maze = explore' (Path maze 0 Set.empty)
     explore' path
       | position == getEnd maze = Just path
       | position `Set.member` getWalls maze = Nothing
-      | position `Set.member` getVisited path = Nothing
-      | otherwise = explore' (path `move` Forward) <|> explore' (path `move` Clockwise) <|> explore' (path `move` Counterclockwise)
+      | (Nothing `setOrientation` position) `Set.member` getVisited path = traceShow path (Nothing)
+      | otherwise = forward <|> clockwise <|> counterclockwise
       where
         maze = getMaze path
         position = getPosition maze
+        forward = explore' (path `move` Forward)
+        clockwise = explore' (path `move` Clockwise)
+        counterclockwise = explore' (path `move` Counterclockwise)
 
 part1 input =
   let (Position (X sx) (Y sy) _) = getStart input
