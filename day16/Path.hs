@@ -48,10 +48,10 @@ explore = explore' . fromMaze
       | position `Set.member` getVisited path = Nothing
       | otherwise = case getOrientation position of
           Nothing -> error "No orientation"
-          Just North -> n <|> e <|> w <|> s
-          Just South -> s <|> e <|> w <|> n
-          Just East -> e <|> n <|> s <|> w
-          Just West -> w <|> n <|> s <|> e
+          Just North -> n <|> e <|> w
+          Just South -> s <|> e <|> w
+          Just East -> e <|> n <|> s
+          Just West -> w <|> n <|> s
       where
         maze = getMaze path
         position = getPosition maze
