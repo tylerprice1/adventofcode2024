@@ -1,6 +1,5 @@
 module Position where
 
-import Data.Maybe (fromJust, isNothing)
 import GHC.Generics (Generic)
 
 newtype X = X Int deriving (Eq, Generic, Ord, Num, Show)
@@ -42,7 +41,7 @@ setOrientation :: Position -> Maybe Direction -> Position
 setOrientation (Position x y _) = Position x y
 
 forward :: Position -> Position
-forward (Position x y Nothing) = error "No orientation"
+forward (Position _ _ Nothing) = error "No orientation"
 forward (Position x y (Just North)) = Position x (y - 1) (Just North)
 forward (Position x y (Just South)) = Position x (y + 1) (Just South)
 forward (Position x y (Just East)) = Position (x + 1) y (Just East)
@@ -72,13 +71,15 @@ instance Eq Position where
 
 instance Ord Position where
   compare :: Position -> Position -> Ordering
+  compare (Position x1 y1 Nothing) (Position x2 y2 _) = case compare x1 x2 of
+    EQ -> compare y1 y2
+    other -> other
+  compare (Position x1 y1 _) (Position x2 y2 Nothing) = case compare x1 x2 of
+    EQ -> compare y1 y2
+    other -> other
   compare (Position x1 y1 o1) (Position x2 y2 o2) = case compare x1 x2 of
     EQ -> case compare y1 y2 of
-      EQ -> case o1 of
-        Nothing -> EQ
-        (Just o1) -> case o2 of
-          Nothing -> EQ
-          (Just o2) -> compare o1 o2
+      EQ -> compare o1 o2
       other -> other
     other -> other
 
@@ -91,6 +92,6 @@ instance Show Position where
       ++ show y
       ++ ( case o of
              Nothing -> ""
-             Just o -> ", " ++ show o
+             Just o' -> ", " ++ show o'
          )
       ++ ")"
