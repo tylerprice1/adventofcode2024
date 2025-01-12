@@ -4,16 +4,17 @@ import Control.Applicative ((<|>))
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Data.Set qualified as Set
+import Debug.Trace (trace)
 import GHC.Base (maxInt)
 import Maze (Maze (Maze, getEnd, getPosition, getStart), setPosition)
 import Position (Action (Forward), Direction (..), Height (..), Position (..), Width (..), X (..), Y (..), getOrientation, move, setOrientation)
 import Score (Score (..))
 
-type PositionPathCache = Map.Map Position (Maybe Journey)
-
-type CompletedJourney = (Maybe Journey, PositionPathCache)
+type PositionPathCache = Map.Map Position Journey
 
 type Visited = Set.Set Position
+
+type CompletedJourney = (Maybe Journey, PositionPathCache)
 
 data Journey
   = Journey
@@ -92,24 +93,24 @@ shorterMaybe Nothing (Just b) = Just b
 shorterMaybe (Just a) (Just b) = Just (shorter a b)
 
 embark :: Maze -> Maybe Journey
-embark maze = journey
+embark maze = trace (show (Map.size cache)) (journey)
   where
-    (journey, _) = embark' (fromMaze maze) Map.empty Set.empty 0
+    (journey, cache) = embark' (fromMaze maze) Map.empty Set.empty 0
 
 embark' :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
 embark' journey positionJourneyMap visited depth
-  | depth >= 20000 = error "Too deep"
+  | depth >= 25000 = error "Too deep"
   | position == end =
       let journey' = Journey maze 0 [] [end]
-       in (Just journey', Map.insert position (Just journey') positionJourneyMap)
+       in (Just journey', positionJourneyMap)
   | position `Set.member` visited = (Nothing, positionJourneyMap)
   | position `Set.member` walls = (Nothing, positionJourneyMap)
   | otherwise = case position `Map.lookup` positionJourneyMap of
-      Just j -> (j, positionJourneyMap)
+      Just j -> (Just j, positionJourneyMap)
       Nothing ->
         let (journey'', positionJourneyMap') = branch journey positionJourneyMap (position `Set.insert` visited) depth
             journey' = Just . (position `consPath`) =<< journey''
-         in (journey', Map.insert position journey' positionJourneyMap')
+         in (journey', maybe positionJourneyMap' (\j -> Map.insert position j positionJourneyMap') journey')
   where
     Journey maze _ _ _ = journey
     Maze _ _ position _ end walls = maze
@@ -129,7 +130,6 @@ branch :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
 branch journey positionJourneyMap visited depth = (foldr shorterMaybe Nothing maybeJourneys, positionJourneyMap')
   where
     position = getMazePosition journey
-    maze = getMaze journey
     depth' = depth + 1
     fn :: (Position, [Action]) -> ([Maybe Journey], PositionPathCache) -> ([Maybe Journey], PositionPathCache)
     fn (movedPosition, actions) (maybeJourneys, map) =
