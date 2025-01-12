@@ -10,9 +10,7 @@ import Data.Set qualified as Set
 -- import Debug.Trace (trace, traceShow, traceShowId)
 import Maze
 import Position
-
-newtype Score = Score Int
-  deriving (Eq, Ord, Num, Show)
+import Score (Score)
 
 data Path = Path
   { getMaze :: Maze,

@@ -13,11 +13,12 @@ import Data.Set qualified as Set
 import Debug.Trace (traceShow)
 import GHC.Base (maxInt)
 import GHC.Generics (Generic)
+import Journey (embark)
 import Maze
 import Path
 import Position
 
-part1 = explore
+part1 = embark
 
 part2 :: Maze -> Maze
 part2 input = input
@@ -61,9 +62,9 @@ main = do
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  print (part1 test) -- Expected: 7036
+  -- print (part1 test) -- Expected: 7036
   -- print (part1 test2) -- Expected: 11048
-  -- print (part1 input) -- Expected: ?
+  print (part1 input) -- Expected: ?
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
   -- print (part2 input) -- Expected: ?

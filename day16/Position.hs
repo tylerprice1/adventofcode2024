@@ -62,7 +62,7 @@ facing p direction = case getOrientation p of
 move :: Position -> Direction -> (Position, [Action])
 move p direction =
   let (p', actions) = p `facing` direction
-   in (forward p', Forward : actions)
+   in (forward p', actions ++ [Forward])
 
 instance Eq Position where
   (==) :: Position -> Position -> Bool
