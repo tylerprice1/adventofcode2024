@@ -7,7 +7,7 @@ import Data.List (minimumBy)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
 import Data.Set qualified as Set
-import Debug.Trace (trace, traceShow, traceShowId)
+-- import Debug.Trace (trace, traceShow, traceShowId)
 import Maze
 import Position
 
@@ -20,6 +20,12 @@ data Path = Path
     getPositionPathMap :: Map.Map Position (Maybe Path),
     getVisited :: Set.Set Position
   }
+
+setActions :: Path -> [Action] -> Path
+setActions (Path m _ p v) actions = Path m actions p v
+
+setMaze :: Path -> Maze -> Path
+setMaze (Path _ a p v) maze = Path maze a p v
 
 setPositionPathMap :: Path -> Map.Map Position (Maybe Path) -> Path
 setPositionPathMap (Path m a _ v) p = Path m a p v
@@ -34,24 +40,6 @@ score path = foldr (\a s -> actionScore a + s) 0 (getActions path)
     actionScore Forward = 1
     actionScore _ = 1_000
 
-turnTo :: Position -> Direction -> (Position, [Action])
-turnTo p direction = case getOrientation p of
-  Just o
-    | o == direction -> (p, [])
-    | clockwise o == direction -> (p', [Clockwise])
-    | counterclockwise o == direction -> (p', [Counterclockwise])
-    | otherwise -> (p', [Clockwise, Clockwise])
-  Nothing -> error "No orientation"
-  where
-    p' = p `setOrientation` Just direction
-
-move :: Path -> Direction -> Path
-move (Path maze actions positionPathMap visited) direction =
-  let p = getPosition maze
-      (turned, actions') = p `turnTo` direction
-      p' = forward turned
-   in Path (p' `setPosition` maze) (Forward : actions' ++ actions) positionPathMap (p `Set.insert` visited)
-
 minPath :: Path -> Path -> Path
 minPath a b = minimumBy (compare `on` score) [a, b]
 
@@ -61,24 +49,26 @@ min3Path a b c = minimumBy (compare `on` score) [a, b, c]
 explore :: Maze -> Maybe Path
 explore maze = explore' (fromMaze maze) 0
   where
+    exploreDirection :: Path -> Direction -> Int -> Maybe Path
+    exploreDirection path direction depth =
+      let (position, actions) = getPosition (getMaze path) `move` direction
+          newPath = explore' (path `setMaze` (position `setPosition` maze)) (depth + 1)
+       in (\p -> Just (p `setActions` (actions ++ getActions p))) =<< newPath
+
     explore' :: Path -> Int -> Maybe Path
     explore' path depth = Map.findWithDefault result position positionPathMap
       where
         depthStr = replicate depth ' '
         depth' = depth + 1
         (Path maze actions positionPathMap visited) = path
-        position = getPosition maze
+        (Maze _ _ position _ end walls) = maze
 
         result
-          | position == getEnd maze =
-              traceShowId
-                ( Just
-                    ( Path maze actions (Map.insert position result positionPathMap) (position `Set.insert` visited)
-                    )
-                )
-          | position `Set.member` getWalls maze = Nothing
-          | position `Set.member` getVisited path = Nothing
-          | otherwise = case trace (depthStr ++ show position) (getOrientation position) of
+          | depth > 100 = error ("Too deep\n" ++ show path)
+          | position == end = Just (Path maze actions (Map.insert position result positionPathMap) (position `Set.insert` visited))
+          | position `Set.member` walls = Nothing
+          | position `Set.member` visited = Nothing
+          | otherwise = case (getOrientation position) of
               Just North -> shortestPath North East West
               Just South -> shortestPath South East West
               Just East -> shortestPath East North South
@@ -86,24 +76,24 @@ explore maze = explore' (fromMaze maze) 0
               Nothing -> error "No orientation"
 
         shortestPath :: Direction -> Direction -> Direction -> Maybe Path
-        shortestPath a b c = case explore' (path `move` a) depth' of
-          Nothing -> case explore' (path `move` b) depth' of
+        shortestPath a b c = case exploreDirection path a depth' of
+          Nothing -> case exploreDirection path b depth' of
             -- !a, !b
-            Nothing -> explore' (path `move` c) depth'
-            Just bPath -> case explore' ((path `setPositionPathMap` getPositionPathMap bPath) `move` c) depth' of
+            Nothing -> exploreDirection path c depth'
+            Just bPath -> case exploreDirection (path `setPositionPathMap` getPositionPathMap bPath) c depth' of
               -- !a, b, !c
               Nothing -> Just bPath
               -- !a, b, c
               Just cPath -> Just (minPath bPath cPath `setPositionPathMap` getPositionPathMap cPath)
           --
-          Just aPath -> case explore' ((path `setPositionPathMap` getPositionPathMap aPath) `move` b) depth' of
-            Nothing -> case explore' ((path `setPositionPathMap` getPositionPathMap aPath) `move` c) depth' of
+          Just aPath -> case exploreDirection (path `setPositionPathMap` getPositionPathMap aPath) b depth' of
+            Nothing -> case exploreDirection (path `setPositionPathMap` getPositionPathMap aPath) c depth' of
               -- a, !b, !c
               Nothing -> Just aPath
               -- a, !b, c
               Just cPath -> Just (minPath aPath cPath `setPositionPathMap` getPositionPathMap cPath)
             --
-            Just bPath -> case explore' ((path `setPositionPathMap` getPositionPathMap bPath) `move` c) depth' of
+            Just bPath -> case exploreDirection (path `setPositionPathMap` getPositionPathMap bPath) c depth' of
               -- a, b, !c
               Nothing -> Just (minPath aPath bPath `setPositionPathMap` getPositionPathMap bPath)
               -- a, b, c
