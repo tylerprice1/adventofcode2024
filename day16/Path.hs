@@ -7,7 +7,7 @@ import Data.List (minimumBy)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
 import Data.Set qualified as Set
-import Debug.Trace (traceShow)
+import Debug.Trace (trace, traceShow, traceShowId)
 import Maze
 import Position
 
@@ -17,11 +17,15 @@ newtype Score = Score Int
 data Path = Path
   { getMaze :: Maze,
     getActions :: [Action],
+    getPositionPathMap :: Map.Map Position (Maybe Path),
     getVisited :: Set.Set Position
   }
 
+setPositionPathMap :: Path -> Map.Map Position (Maybe Path) -> Path
+setPositionPathMap (Path m a _ v) p = Path m a p v
+
 fromMaze :: Maze -> Path
-fromMaze maze = Path maze [] Set.empty
+fromMaze maze = Path maze [] Map.empty Set.empty
 
 score :: Path -> Score
 score path = foldr (\a s -> actionScore a + s) 0 (getActions path)
@@ -32,51 +36,78 @@ score path = foldr (\a s -> actionScore a + s) 0 (getActions path)
 
 turnTo :: Position -> Direction -> (Position, [Action])
 turnTo p direction = case getOrientation p of
-  Nothing -> error "No orientation"
   Just o
     | o == direction -> (p, [])
     | clockwise o == direction -> (p', [Clockwise])
     | counterclockwise o == direction -> (p', [Counterclockwise])
     | otherwise -> (p', [Clockwise, Clockwise])
+  Nothing -> error "No orientation"
   where
     p' = p `setOrientation` Just direction
 
 move :: Path -> Direction -> Path
-move (Path maze actions visited) direction =
+move (Path maze actions positionPathMap visited) direction =
   let p = getPosition maze
       (turned, actions') = p `turnTo` direction
       p' = forward turned
-   in Path (p' `setPosition` maze) (Forward : actions' ++ actions) (p `Set.insert` visited)
+   in Path (p' `setPosition` maze) (Forward : actions' ++ actions) positionPathMap (p `Set.insert` visited)
+
+minPath :: Path -> Path -> Path
+minPath a b = minimumBy (compare `on` score) [a, b]
+
+min3Path :: Path -> Path -> Path -> Path
+min3Path a b c = minimumBy (compare `on` score) [a, b, c]
 
 explore :: Maze -> Maybe Path
-explore = explore' . fromMaze
+explore maze = explore' (fromMaze maze) 0
   where
-    explore' :: Path -> Maybe Path
-    explore' path
-      | position == getEnd maze = Just path
-      | position `Set.member` getWalls maze = Nothing
-      | position `Set.member` getVisited path = Nothing
-      | otherwise = case getOrientation position of
-          Nothing -> error "No orientation"
-          Just North -> shortestPath n e w
-          Just South -> shortestPath s e w
-          Just East -> shortestPath e n s
-          Just West -> shortestPath w n s
+    explore' :: Path -> Int -> Maybe Path
+    explore' path depth = Map.findWithDefault result position positionPathMap
       where
-        maze = getMaze path
+        depthStr = replicate depth ' '
+        depth' = depth + 1
+        (Path maze actions positionPathMap visited) = path
         position = getPosition maze
-        w = explore' (path `move` West)
-        n = explore' (path `move` North)
-        e = explore' (path `move` East)
-        s = explore' (path `move` South)
 
-        shortestPath :: Maybe Path -> Maybe Path -> Maybe Path -> Maybe Path
-        shortestPath a b c =
-          let maybePaths = a `par` b `par` c `pseq` [a, b, c]
-              paths = catMaybes maybePaths
-           in if null paths
-                then Nothing
-                else Just (minimumBy (compare `on` score) paths)
+        result
+          | position == getEnd maze =
+              traceShowId
+                ( Just
+                    ( Path maze actions (Map.insert position result positionPathMap) (position `Set.insert` visited)
+                    )
+                )
+          | position `Set.member` getWalls maze = Nothing
+          | position `Set.member` getVisited path = Nothing
+          | otherwise = case trace (depthStr ++ show position) (getOrientation position) of
+              Just North -> shortestPath North East West
+              Just South -> shortestPath South East West
+              Just East -> shortestPath East North South
+              Just West -> shortestPath West North South
+              Nothing -> error "No orientation"
+
+        shortestPath :: Direction -> Direction -> Direction -> Maybe Path
+        shortestPath a b c = case explore' (path `move` a) depth' of
+          Nothing -> case explore' (path `move` b) depth' of
+            -- !a, !b
+            Nothing -> explore' (path `move` c) depth'
+            Just bPath -> case explore' ((path `setPositionPathMap` getPositionPathMap bPath) `move` c) depth' of
+              -- !a, b, !c
+              Nothing -> Just bPath
+              -- !a, b, c
+              Just cPath -> Just (minPath bPath cPath `setPositionPathMap` getPositionPathMap cPath)
+          --
+          Just aPath -> case explore' ((path `setPositionPathMap` getPositionPathMap aPath) `move` b) depth' of
+            Nothing -> case explore' ((path `setPositionPathMap` getPositionPathMap aPath) `move` c) depth' of
+              -- a, !b, !c
+              Nothing -> Just aPath
+              -- a, !b, c
+              Just cPath -> Just (minPath aPath cPath `setPositionPathMap` getPositionPathMap cPath)
+            --
+            Just bPath -> case explore' ((path `setPositionPathMap` getPositionPathMap bPath) `move` c) depth' of
+              -- a, b, !c
+              Nothing -> Just (minPath aPath bPath `setPositionPathMap` getPositionPathMap bPath)
+              -- a, b, c
+              Just cPath -> Just (min3Path aPath bPath cPath `setPositionPathMap` getPositionPathMap cPath)
 
 instance Show Path where
   show path =
@@ -106,6 +137,6 @@ instance Show Path where
         ""
         [1 .. height]
     where
-      (Path maze actions visited) = path
+      (Path maze actions positionPathMap visited) = path
       Maze (Width (X width)) (Height (Y height)) position start end walls = maze
       visitedMap = Map.fromList (map (\p -> (Position (getX p) (getY p) Nothing, p)) (Set.toList visited))

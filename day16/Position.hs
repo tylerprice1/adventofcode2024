@@ -35,7 +35,7 @@ counterclockwise East = North
 data Action = Forward | Clockwise | Counterclockwise
   deriving (Eq, Ord, Show)
 
-data Position = Position {getX :: !X, getY :: !Y, getOrientation :: !(Maybe Direction)}
+data Position = Position {getX :: X, getY :: Y, getOrientation :: Maybe Direction}
   deriving (Generic)
 
 setOrientation :: Position -> Maybe Direction -> Position
