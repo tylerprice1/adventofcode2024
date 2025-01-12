@@ -12,15 +12,15 @@ data Maze = Maze
     getWalls :: Set.Set Position
   }
 
-setPosition :: Maze -> Position -> Maze
-setPosition (Maze w h _ s end walls) position = Maze w h position s end walls
+setPosition :: Position -> Maze -> Maze
+setPosition position (Maze w h _ s end walls) = Maze w h position s end walls
 
 instance Show Maze where
   show (Maze (Width (X width)) (Height (Y height)) position start end walls) =
     foldr
       ( \y s ->
           foldr
-            ( \x s' ->
+            ( \x s ->
                 ( let p = Position (X x) (Y y) Nothing
                       ch
                         | p == position = 'O'
@@ -30,7 +30,7 @@ instance Show Maze where
                         | otherwise = '.'
                    in ch
                 )
-                  : s'
+                  : s
             )
             ""
             [1 .. width]
