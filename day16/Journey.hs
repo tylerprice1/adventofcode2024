@@ -2,7 +2,7 @@ module Journey (Journey, embark) where
 
 import Control.Applicative ((<|>))
 import Data.Map qualified as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (catMaybes, fromJust)
 import Data.Set qualified as Set
 import Debug.Trace (trace)
 import GHC.Base (maxInt)
@@ -93,7 +93,7 @@ shorterMaybe Nothing (Just b) = Just b
 shorterMaybe (Just a) (Just b) = Just (shorter a b)
 
 embark :: Maze -> Maybe Journey
-embark maze = trace (show (Map.size cache)) (journey)
+embark maze = trace (Map.foldrWithKey (\position journey s -> show position ++ " " ++ show (getScore journey) ++ "\n" ++ s) "" cache) (journey)
   where
     (journey, cache) = embark' (fromMaze maze) Map.empty Set.empty 0
 
@@ -127,7 +127,7 @@ nextPositions :: Position -> [(Position, [Action])]
 nextPositions position = map (position `move`) (nextDirections position)
 
 branch :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
-branch journey positionJourneyMap visited depth = (foldr shorterMaybe Nothing maybeJourneys, positionJourneyMap')
+branch journey positionJourneyMap visited depth = ({- if not (null (catMaybes maybeJourneys)) then trace (show position ++ " " ++ show (map getScore (catMaybes maybeJourneys)) ++ " -> " ++ show ((Just . getScore) =<< (foldr shorterMaybe Nothing maybeJourneys))) (foldr shorterMaybe Nothing maybeJourneys) else -} foldr shorterMaybe Nothing maybeJourneys, positionJourneyMap')
   where
     position = getMazePosition journey
     depth' = depth + 1
