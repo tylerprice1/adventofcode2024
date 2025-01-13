@@ -10,7 +10,6 @@ import Data.List (minimumBy)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, isNothing)
 import Data.Set qualified as Set
-import Debug.Trace (traceShow)
 import GHC.Base (maxInt)
 import GHC.Generics (Generic)
 import Journey (embark)
@@ -67,6 +66,18 @@ main = do
   test5File <- readFile "./test5.txt"
   let test5 = processInput test5File
 
+  test6File <- readFile "./test6.txt"
+  let test6 = processInput test6File
+
+  test7File <- readFile "./test7.txt"
+  let test7 = processInput test7File
+
+  test8File <- readFile "./test8.txt"
+  let test8 = processInput test8File
+
+  test9File <- readFile "./test9.txt"
+  let test9 = processInput test9File
+
   inputFile <- readFile "./input.txt"
   let input = processInput inputFile
 
@@ -76,7 +87,12 @@ main = do
   -- print (part1 test3) -- Expected: 1004
   -- print (part1 test4) -- Expected: 3010
   -- print (part1 test5) -- Expected: 4013
+  -- print (part1 test6) -- Expected: 21148
+  -- print (part1 test7) -- Expected: 5078
+  -- print (part1 test8) -- Expected: 21110
+  -- print (part1 test9) -- Expected: 41210
   print (part1 input) -- Expected: ? NOT: 124476,
+  --
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
   -- print (part2 input) -- Expected: ?

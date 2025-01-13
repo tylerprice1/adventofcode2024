@@ -26,18 +26,9 @@ data Journey
     getPath :: [Position]
   }
 
-calculateScore :: Journey -> Score
-calculateScore journey = foldr (\a s -> actionScore a + s) 0 (getActions journey)
-  where
-    actionScore :: Action -> Score
-    actionScore Forward = 1
-    actionScore _ = 1_000
-
 instance Show Journey where
   show journey =
     show score
-      ++ " == "
-      ++ show (calculateScore journey)
       ++ "\n"
       ++ foldr
         ( \y s ->
@@ -45,6 +36,8 @@ instance Show Journey where
               ( \x s ->
                   ( let p = Position (X x) (Y y) Nothing
                         ch
+                          | p == position && p == start = 'ß'
+                          | p == position && p == end = 'Œ'
                           | p == position = 'O'
                           | p == start = 'S'
                           | p == end = 'E'
@@ -73,8 +66,6 @@ instance Show Journey where
 
 showJourneyWithVisited journey cache visited =
   show score
-    ++ " == "
-    ++ show (calculateScore journey)
     ++ "\n"
     ++ foldr
       ( \y s ->
@@ -86,10 +77,11 @@ showJourneyWithVisited journey cache visited =
                         | p == start = 'S'
                         | p == end = 'E'
                         | p `Set.member` walls = '#'
-                        | p `Set.member` visited = 'X'
-                        | p `Map.member` cache = 'C'
                         | otherwise = case p `Map.lookup` pathMap of
-                            Nothing -> '.'
+                            Nothing
+                              | p `Set.member` visited -> 'X'
+                              | p `Map.member` cache -> 'C'
+                              | otherwise -> '.'
                             Just p' -> maybe 'O' (head . show) (getOrientation p')
                    in ch
                 )
@@ -137,57 +129,54 @@ shorterMaybe Nothing (Just b) = Just b
 shorterMaybe (Just a) (Just b) = Just (shorter a b)
 
 embark :: Maze -> Maybe Journey
-embark maze = {- trace (Map.foldrWithKey (\position journey s -> show position ++ " " ++ show (getScore journey) ++ "\n" ++ s) "" cache)  -} (journey)
+embark maze = journey
   where
     (journey, cache) = embark' (fromMaze maze) Map.empty Set.empty 0
 
 embark' :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
-embark' journey positionJourneyMap visited depth
-  | depth >= 25000 = error "Too deep"
+embark' journey cache visited depth
   | position == end =
       let journey' = Journey maze 0 [] [end]
-       in trace (showJourneyWithVisited journey' positionJourneyMap visited) (Just journey', positionJourneyMap)
-  | position `Set.member` visited = (Nothing, positionJourneyMap)
-  | position `Set.member` walls = (Nothing, positionJourneyMap)
-  | otherwise = case position `Map.lookup` positionJourneyMap of
-      Just j -> (Just j, positionJourneyMap)
+       in (Just journey', cache)
+  | position `Set.member` visited = (Nothing, cache)
+  | position `Set.member` walls = (Nothing, cache)
+  | depth >= (5 * width * height) = error ("Depth (" ++ show depth ++ ") is greater than area of maze" ++ "\n" ++ showJourneyWithVisited journey cache visited)
+  | otherwise = case position `Map.lookup` cache of
+      Just j -> (Just j, cache)
       Nothing ->
-        let (journey'', positionJourneyMap') = branch journey positionJourneyMap (position `Set.insert` visited) depth
+        let (journey'', cache') = branch journey cache (position `Set.insert` visited) depth
             journey' = Just . (position `consPath`) =<< journey''
-         in (journey', maybe positionJourneyMap' (\j -> Map.insert position j positionJourneyMap') journey')
+         in if position == start
+              then
+                trace
+                  (maybe "" (\j -> showJourneyWithVisited j cache' (position `Set.insert` visited)) journey')
+                  (journey', maybe cache' (\j -> Map.insert position j cache') journey')
+              else (journey', maybe cache' (\j -> Map.insert position j cache') journey')
   where
     Journey maze _ _ _ = journey
-    Maze _ _ position _ end walls = maze
+    Maze (Width (X width)) (Height (Y height)) position start end walls = maze
 
 nextDirections :: Position -> [Direction]
 nextDirections (Position _ _ o) = case o of
-  Just North -> [North, East, West {- , South -}]
-  Just South -> [South, East, West {- , North -}]
-  Just East -> [East, North, South {- , West -}]
-  Just West -> [West, North, South {- , East -}]
+  Just North -> [North, East, West]
+  Just South -> [South, East, West]
+  Just East -> [East, North, South]
+  Just West -> [West, North, South]
   Nothing -> error "No orientation"
 
 nextPositions :: Position -> [(Position, [Action])]
 nextPositions position = map (position `move`) (nextDirections position)
 
 branch :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
-branch journey positionJourneyMap visited depth =
-  ( if not (null (catMaybes maybeJourneys)) && (position == Position (X 126) (Y 4) (Just East))
-      then
-        {-  trace
-           (show position ++ " " ++ (foldr (\j s -> showJourneyWithVisited j positionJourneyMap' visited ++ "\n" ++ s) "" (catMaybes maybeJourneys)) ++ " -> " ++ show ((Just . getScore) =<< (foldr shorterMaybe Nothing maybeJourneys))) -}
-        (foldr shorterMaybe Nothing maybeJourneys)
-      else foldr shorterMaybe Nothing maybeJourneys,
-    positionJourneyMap'
-  )
+branch journey cache visited depth = (foldr shorterMaybe Nothing maybeJourneys, cache')
   where
     position = getMazePosition journey
     depth' = depth + 1
     fn :: (Position, [Action]) -> ([Maybe Journey], PositionPathCache) -> ([Maybe Journey], PositionPathCache)
-    fn (movedPosition, actions) (maybeJourneys, map) =
+    fn (movedPosition, actions) (maybeJourneys, cache) =
       let movedJourneyStart = journey `setMazePosition` movedPosition
-          (maybeMovedJourneyEnd', map') = embark' movedJourneyStart map visited depth'
+          (maybeMovedJourneyEnd', cache') = embark' movedJourneyStart cache visited depth'
           maybeMovedJourneyEnd = (\j -> Just (actions `updateScore` j)) =<< maybeMovedJourneyEnd'
-       in (maybeMovedJourneyEnd : maybeJourneys, map')
+       in (maybeMovedJourneyEnd : maybeJourneys, cache')
 
-    (maybeJourneys, positionJourneyMap') = foldr fn ([], positionJourneyMap) (nextPositions position)
+    (maybeJourneys, cache') = foldr fn ([], cache) (nextPositions position)
