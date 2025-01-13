@@ -10,6 +10,8 @@ import Maze (Maze (Maze, getEnd, getPosition, getStart), setPosition)
 import Position (Action (Forward), Direction (..), Height (..), Position (..), Width (..), X (..), Y (..), getOrientation, move, setOrientation)
 import Score (Score (..))
 
+-- trace a b = b
+
 type PositionPathCache = Map.Map Position Journey
 
 type Visited = Set.Set Position
@@ -62,9 +64,51 @@ instance Show Journey where
         ""
         [1 .. height]
     where
-      (Journey maze score _ path) = journey
+      -- ++ (foldr (\p s -> show p ++ "\n" ++ s) "" path)
+      -- ++ (foldr (\a s -> show a ++ "\n" ++ s) "" actions)
+
+      (Journey maze score actions path) = journey
       Maze (Width (X width)) (Height (Y height)) position start end walls = maze
       pathMap = Map.fromList (map (\p -> (p `setOrientation` Nothing, p)) path)
+
+showJourneyWithVisited journey cache visited =
+  show score
+    ++ " == "
+    ++ show (calculateScore journey)
+    ++ "\n"
+    ++ foldr
+      ( \y s ->
+          foldr
+            ( \x s ->
+                ( let p = Position (X x) (Y y) Nothing
+                      ch
+                        | p == position = 'O'
+                        | p == start = 'S'
+                        | p == end = 'E'
+                        | p `Set.member` walls = '#'
+                        | p `Set.member` visited = 'X'
+                        | p `Map.member` cache = 'C'
+                        | otherwise = case p `Map.lookup` pathMap of
+                            Nothing -> '.'
+                            Just p' -> maybe 'O' (head . show) (getOrientation p')
+                   in ch
+                )
+                  : s
+            )
+            ""
+            [1 .. width]
+            ++ "\n"
+            ++ s
+      )
+      ""
+      [1 .. height]
+  where
+    -- ++ (foldr (\p s -> show p ++ "\n" ++ s) "" path)
+    -- ++ (foldr (\a s -> show a ++ "\n" ++ s) "" actions)
+
+    (Journey maze score actions path) = journey
+    Maze (Width (X width)) (Height (Y height)) position start end walls = maze
+    pathMap = Map.fromList (map (\p -> (p `setOrientation` Nothing, p)) path)
 
 fromMaze :: Maze -> Journey
 fromMaze maze = Journey maze 0 [] []
@@ -93,7 +137,7 @@ shorterMaybe Nothing (Just b) = Just b
 shorterMaybe (Just a) (Just b) = Just (shorter a b)
 
 embark :: Maze -> Maybe Journey
-embark maze = trace (Map.foldrWithKey (\position journey s -> show position ++ " " ++ show (getScore journey) ++ "\n" ++ s) "" cache) (journey)
+embark maze = {- trace (Map.foldrWithKey (\position journey s -> show position ++ " " ++ show (getScore journey) ++ "\n" ++ s) "" cache)  -} (journey)
   where
     (journey, cache) = embark' (fromMaze maze) Map.empty Set.empty 0
 
@@ -102,7 +146,7 @@ embark' journey positionJourneyMap visited depth
   | depth >= 25000 = error "Too deep"
   | position == end =
       let journey' = Journey maze 0 [] [end]
-       in (Just journey', positionJourneyMap)
+       in trace (showJourneyWithVisited journey' positionJourneyMap visited) (Just journey', positionJourneyMap)
   | position `Set.member` visited = (Nothing, positionJourneyMap)
   | position `Set.member` walls = (Nothing, positionJourneyMap)
   | otherwise = case position `Map.lookup` positionJourneyMap of
@@ -117,17 +161,25 @@ embark' journey positionJourneyMap visited depth
 
 nextDirections :: Position -> [Direction]
 nextDirections (Position _ _ o) = case o of
-  Just North -> [North, East, West]
-  Just South -> [South, East, West]
-  Just East -> [East, North, South]
-  Just West -> [West, North, South]
+  Just North -> [North, East, West {- , South -}]
+  Just South -> [South, East, West {- , North -}]
+  Just East -> [East, North, South {- , West -}]
+  Just West -> [West, North, South {- , East -}]
   Nothing -> error "No orientation"
 
 nextPositions :: Position -> [(Position, [Action])]
 nextPositions position = map (position `move`) (nextDirections position)
 
 branch :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
-branch journey positionJourneyMap visited depth = ({- if not (null (catMaybes maybeJourneys)) then trace (show position ++ " " ++ show (map getScore (catMaybes maybeJourneys)) ++ " -> " ++ show ((Just . getScore) =<< (foldr shorterMaybe Nothing maybeJourneys))) (foldr shorterMaybe Nothing maybeJourneys) else -} foldr shorterMaybe Nothing maybeJourneys, positionJourneyMap')
+branch journey positionJourneyMap visited depth =
+  ( if not (null (catMaybes maybeJourneys)) && (position == Position (X 126) (Y 4) (Just East))
+      then
+        {-  trace
+           (show position ++ " " ++ (foldr (\j s -> showJourneyWithVisited j positionJourneyMap' visited ++ "\n" ++ s) "" (catMaybes maybeJourneys)) ++ " -> " ++ show ((Just . getScore) =<< (foldr shorterMaybe Nothing maybeJourneys))) -}
+        (foldr shorterMaybe Nothing maybeJourneys)
+      else foldr shorterMaybe Nothing maybeJourneys,
+    positionJourneyMap'
+  )
   where
     position = getMazePosition journey
     depth' = depth + 1

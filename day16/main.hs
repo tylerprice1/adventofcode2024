@@ -58,12 +58,24 @@ main = do
   test2File <- readFile "./test2.txt"
   let test2 = processInput test2File
 
+  test3File <- readFile "./test3.txt"
+  let test3 = processInput test3File
+
+  test4File <- readFile "./test4.txt"
+  let test4 = processInput test4File
+
+  test5File <- readFile "./test5.txt"
+  let test5 = processInput test5File
+
   inputFile <- readFile "./input.txt"
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
   -- print (part1 test) -- Expected: 7036
   -- print (part1 test2) -- Expected: 11048
+  -- print (part1 test3) -- Expected: 1004
+  -- print (part1 test4) -- Expected: 3010
+  -- print (part1 test5) -- Expected: 4013
   print (part1 input) -- Expected: ? NOT: 124476,
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
