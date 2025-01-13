@@ -137,3 +137,5 @@ dist-newstyle
 
 # Other
 debug.txt
+
+**/.DS_Store
