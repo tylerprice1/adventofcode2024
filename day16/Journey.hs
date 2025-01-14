@@ -12,11 +12,11 @@ import Score (Score (..))
 
 -- trace a b = b
 
-type PositionPathCache = Map.Map Position Journey
+type PositionJourneyCache = Map.Map Position Journey
 
 type Visited = Set.Set Position
 
-type CompletedJourney = (Maybe Journey, PositionPathCache)
+type CompletedJourney = (Maybe Journey, PositionJourneyCache)
 
 data Journey
   = Journey
@@ -144,7 +144,7 @@ embark maze = journey
   where
     (journey, cache) = embark' (fromMaze maze) Map.empty Set.empty 0
 
-embark' :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
+embark' :: Journey -> PositionJourneyCache -> Visited -> Int -> CompletedJourney
 embark' journey cache visited depth =
   case position `Map.lookup` cache of
     Just j ->
@@ -163,11 +163,11 @@ embark' journey cache visited depth =
     journey' = position `consPath` journey
     Maze (Width (X width)) (Height (Y height)) position start end walls = maze
 
-branch :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
+branch :: Journey -> PositionJourneyCache -> Visited -> Int -> CompletedJourney
 branch journey cache visited depth = (foldr shorterMaybe Nothing maybeJourneys, cache')
   where
     depth' = depth + 1
-    fn :: (Position, [Action]) -> ([Maybe Journey], PositionPathCache) -> ([Maybe Journey], PositionPathCache)
+    fn :: (Position, [Action]) -> ([Maybe Journey], PositionJourneyCache) -> ([Maybe Journey], PositionJourneyCache)
     fn (position, actions) (maybeJourneys, cache) =
       let (maybeJourney, cache') = embark' (actions `updateScore` journey `setMazePosition` position) cache visited depth'
        in (maybeJourney : maybeJourneys, cache')
