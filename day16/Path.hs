@@ -7,7 +7,6 @@ import Data.List (minimumBy)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
 import Data.Set qualified as Set
--- import Debug.Trace (trace, traceShow, traceShowId)
 import Maze
 import Position
 import Score (Score)

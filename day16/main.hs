@@ -1,5 +1,3 @@
--- import Debug.Trace (trace)
-
 import Control.Applicative ((<|>))
 import Control.DeepSeq (deepseq)
 import Control.Exception (assert)
