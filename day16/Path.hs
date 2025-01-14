@@ -76,7 +76,10 @@ explore' path cache visited depth = case Map.lookup position cache of
     | position `Set.member` walls -> (Nothing, cache, visited)
     | position `elem` history -> (Nothing, cache, visited')
     | otherwise ->
-        let (forwardPath, forwardCache, forwardVisited) = explore' (Path maze (Forward : actions)) cache visited' depth'
+        let (Path maze actions) = case Map.lookup position cache of
+              Nothing -> path
+              Just path' -> minPath path path'
+            (forwardPath, forwardCache, forwardVisited) = explore' (Path maze (Forward : actions)) cache visited' depth'
             (clockwisePath, clockwiseCache, clockwiseVisited) = explore' (Path maze (Clockwise : actions)) forwardCache forwardVisited depth'
             (counterclockwisePath, counterclockwiseCache, counterclockwiseVisited) = explore' (Path maze (Counterclockwise : actions)) clockwiseCache clockwiseVisited depth'
             maybePaths = [forwardPath, clockwisePath, counterclockwisePath]
@@ -84,7 +87,7 @@ explore' path cache visited depth = case Map.lookup position cache of
          in (shortest, Map.insert position path counterclockwiseCache, counterclockwiseVisited)
   where
     visited' = path `Set.insert` visited
-    (Path maze actions) = path
+    (Path maze _) = path
     (Maze (Width (X width)) (Height (Y height)) _ end walls) = maze
     (position : history) = getPositions path
     depthStr = replicate depth ' '
