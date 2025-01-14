@@ -26,10 +26,10 @@ type Cache = Map.Map Position Path
 type Visited = Set.Set Path
 
 getPositions :: Path -> [Position]
-getPositions (Path (Maze _ _ start _ _) actions) = foldr (\a (p : ps) -> (p `go` a) : p : ps) [start] actions
+getPositions (Path (Maze _ _ start _ _) actions) = reverse (foldr (\a (p : ps) -> (p `go` a) : p : ps) [start] actions)
 
 getPosition :: Path -> Position
-getPosition (Path (Maze _ _ start _ _) actions) = foldr (flip go) start actions
+getPosition = head . getPositions
 
 fromMaze :: Maze -> Path
 fromMaze maze = Path maze []
