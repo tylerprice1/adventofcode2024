@@ -1,37 +1,41 @@
-module Path where
+module Path (explore) where
 
 import Control.Applicative ((<|>))
 import Control.Parallel (par, pseq)
 import Data.Function (on)
 import Data.List (minimumBy)
 import Data.Map qualified as Map
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromJust)
 import Data.Set qualified as Set
-import Maze
-import Position
+import Debug.Trace (traceShowId)
+import Direction (Direction (..))
+import Maze (Maze (..))
+import Position (Action (..), Height (..), Position (..), Width (..), X (..), Y (..), go, move)
 import Score (Score)
 
-data Path = Path
-  { getMaze :: Maze,
-    getActions :: [Action],
-    getPositionPathMap :: Map.Map Position (Maybe Path),
-    getVisited :: Set.Set Position
-  }
+data Path = Path Maze [Action]
+  deriving (Eq)
 
-setActions :: Path -> [Action] -> Path
-setActions (Path m _ p v) actions = Path m actions p v
+instance Ord Path where
+  compare (Path mazeA actionsA) (Path mazeB actionsB) = case compare actionsA actionsB of
+    EQ -> compare mazeA mazeB
+    other -> other
 
-setMaze :: Path -> Maze -> Path
-setMaze (Path _ a p v) maze = Path maze a p v
+type Cache = Map.Map Position Path
 
-setPositionPathMap :: Path -> Map.Map Position (Maybe Path) -> Path
-setPositionPathMap (Path m a _ v) p = Path m a p v
+type Visited = Set.Set Path
+
+getPositions :: Path -> [Position]
+getPositions (Path (Maze _ _ start _ _) actions) = foldr (\a (p : ps) -> (p `go` a) : p : ps) [start] actions
+
+getPosition :: Path -> Position
+getPosition (Path (Maze _ _ start _ _) actions) = foldr (flip go) start actions
 
 fromMaze :: Maze -> Path
-fromMaze maze = Path maze [] Map.empty Set.empty
+fromMaze maze = Path maze []
 
 score :: Path -> Score
-score path = foldr (\a s -> actionScore a + s) 0 (getActions path)
+score (Path _ actions) = foldr (\a s -> actionScore a + s) 0 actions
   where
     actionScore :: Action -> Score
     actionScore Forward = 1
@@ -43,58 +47,45 @@ minPath a b = minimumBy (compare `on` score) [a, b]
 min3Path :: Path -> Path -> Path -> Path
 min3Path a b c = minimumBy (compare `on` score) [a, b, c]
 
+minimumMaybePath :: [Maybe Path] -> Maybe Path
+minimumMaybePath maybePaths =
+  case catMaybes maybePaths of
+    [] -> Nothing
+    paths -> Just (minimumBy (compare `on` score) paths)
+
+minimumPath :: [Path] -> Path
+minimumPath = minimumBy (compare `on` score)
+
 explore :: Maze -> Maybe Path
-explore maze = explore' (fromMaze maze) 0
+explore maze =
+  let (p, _, _) = explore' (fromMaze maze) Map.empty Set.empty 0
+   in p
+
+explore' :: Path -> Cache -> Visited -> Int -> (Maybe Path, Cache, Visited)
+explore' path cache visited depth = case Map.lookup position cache of
+  Just path' ->
+    let shorter = minPath path path'
+     in (Just path, Map.insert position shorter cache, visited')
+  Nothing
+    | depth > width * height -> error ("Too deep " ++ "(" ++ show depth ++ ")" ++ "\n" ++ show path)
+    | path `Set.member` visited -> (Nothing, cache, visited)
+    | position `elem` positions -> (Nothing, cache, visited')
+    | position == end -> (Just path, Map.insert end path cache, visited')
+    | position `Set.member` walls -> (Nothing, cache, visited')
+    | otherwise ->
+        let (forwardPath, forwardCache, forwardVisited) = explore' (Path maze (Forward : actions)) cache visited' depth'
+            (clockwisePath, clockwiseCache, clockwiseVisited) = explore' (Path maze (Clockwise : actions)) forwardCache forwardVisited depth'
+            (counterclockwisePath, counterclockwiseCache, counterclockwiseVisited) = explore' (Path maze (Counterclockwise : actions)) clockwiseCache clockwiseVisited depth'
+            maybePaths = [forwardPath, clockwisePath, counterclockwisePath]
+            shortest = minimumMaybePath maybePaths
+         in (shortest, counterclockwiseCache, counterclockwiseVisited)
   where
-    exploreDirection :: Path -> Direction -> Int -> Maybe Path
-    exploreDirection path direction depth =
-      let (position, actions) = getPosition (getMaze path) `move` direction
-          newPath = explore' (path `setMaze` (position `setPosition` maze)) (depth + 1)
-       in (\p -> Just (p `setActions` (actions ++ getActions p))) =<< newPath
-
-    explore' :: Path -> Int -> Maybe Path
-    explore' path depth = Map.findWithDefault result position positionPathMap
-      where
-        depthStr = replicate depth ' '
-        depth' = depth + 1
-        (Path maze actions positionPathMap visited) = path
-        (Maze _ _ position _ end walls) = maze
-
-        result
-          | depth > 100 = error ("Too deep\n" ++ show path)
-          | position == end = Just (Path maze actions (Map.insert position result positionPathMap) (position `Set.insert` visited))
-          | position `Set.member` walls = Nothing
-          | position `Set.member` visited = Nothing
-          | otherwise = case (getOrientation position) of
-              Just North -> shortestPath North East West
-              Just South -> shortestPath South East West
-              Just East -> shortestPath East North South
-              Just West -> shortestPath West North South
-              Nothing -> error "No orientation"
-
-        shortestPath :: Direction -> Direction -> Direction -> Maybe Path
-        shortestPath a b c = case exploreDirection path a depth' of
-          Nothing -> case exploreDirection path b depth' of
-            -- !a, !b
-            Nothing -> exploreDirection path c depth'
-            Just bPath -> case exploreDirection (path `setPositionPathMap` getPositionPathMap bPath) c depth' of
-              -- !a, b, !c
-              Nothing -> Just bPath
-              -- !a, b, c
-              Just cPath -> Just (minPath bPath cPath `setPositionPathMap` getPositionPathMap cPath)
-          --
-          Just aPath -> case exploreDirection (path `setPositionPathMap` getPositionPathMap aPath) b depth' of
-            Nothing -> case exploreDirection (path `setPositionPathMap` getPositionPathMap aPath) c depth' of
-              -- a, !b, !c
-              Nothing -> Just aPath
-              -- a, !b, c
-              Just cPath -> Just (minPath aPath cPath `setPositionPathMap` getPositionPathMap cPath)
-            --
-            Just bPath -> case exploreDirection (path `setPositionPathMap` getPositionPathMap bPath) c depth' of
-              -- a, b, !c
-              Nothing -> Just (minPath aPath bPath `setPositionPathMap` getPositionPathMap bPath)
-              -- a, b, c
-              Just cPath -> Just (min3Path aPath bPath cPath `setPositionPathMap` getPositionPathMap cPath)
+    visited' = path `Set.insert` visited
+    (Path maze actions) = path
+    (Maze (Width (X width)) (Height (Y height)) _ end walls) = maze
+    (position : positions) = getPositions path
+    depthStr = replicate depth ' '
+    depth' = depth + 1
 
 instance Show Path where
   show path =
@@ -108,10 +99,12 @@ instance Show Path where
                         ch
                           | p == start = 'S'
                           | p == end = 'E'
-                          | p == position = 'O'
-                          | p `Map.member` visitedMap = maybe 'O' (maybe 'O' (head . show) . getOrientation) (p `Map.lookup` visitedMap)
                           | p `Set.member` walls = '#'
-                          | otherwise = '.'
+                          | otherwise =
+                              maybe
+                                '.'
+                                (head . show . fromJust . getOrientation)
+                                (Map.lookup p visitedMap)
                      in ch
                   )
                     : s
@@ -123,7 +116,10 @@ instance Show Path where
         )
         ""
         [1 .. height]
+      ++ "\n"
+      ++ foldr (\a s -> show a ++ "\n" ++ s) "" actions
     where
-      (Path maze actions positionPathMap visited) = path
-      Maze (Width (X width)) (Height (Y height)) position start end walls = maze
-      visitedMap = Map.fromList (map (\p -> (Position (getX p) (getY p) Nothing, p)) (Set.toList visited))
+      (Path maze actions) = path
+      Maze (Width (X width)) (Height (Y height)) start end walls = maze
+      visited = getPositions path
+      visitedMap = Map.fromList (map (\(Position x y o) -> (Position x y Nothing, Position x y o)) visited)

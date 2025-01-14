@@ -8,20 +8,20 @@ import Data.List (minimumBy)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, isNothing)
 import Data.Set qualified as Set
+import Direction (Direction (..))
 import GHC.Base (maxInt)
 import GHC.Generics (Generic)
-import Journey (embark)
-import Maze
-import Path
-import Position
+import Maze (Maze (..))
+import Path (explore)
+import Position (Height (..), Position (..), Width (..), X (..), Y (..))
 
-part1 = embark
+part1 = explore
 
 part2 :: Maze -> Maze
 part2 input = input
 
 processInput :: String -> Maze
-processInput contents = Position startX startY (Just East) `setPosition` maze
+processInput contents = maze
   where
     lns = lines contents
     height = length lns
@@ -32,20 +32,19 @@ processInput contents = Position startX startY (Just East) `setPosition` maze
         ( \(line, y) maze ->
             foldr
               ( \(ch, x) maze ->
-                  let (Maze width height position start end walls) = maze
-                      p = Position (X x) (Y y) Nothing
+                  let (Maze width height start end walls) = maze
+                      withOrientation = Position (X x) (Y y)
                    in case ch of
-                        '#' -> Maze width height position start end (p `Set.insert` walls)
-                        'S' -> Maze width height position p end walls
-                        'E' -> Maze width height position start p walls
+                        '#' -> Maze width height start end (withOrientation Nothing `Set.insert` walls)
+                        'S' -> Maze width height (withOrientation (Just East)) end walls
+                        'E' -> Maze width height start (withOrientation Nothing) walls
                         _ -> maze
               )
               maze
               (zip line [1 ..])
         )
-        (Maze (Width (X width)) (Height (Y height)) defaultPosition defaultPosition defaultPosition Set.empty)
+        (Maze (Width (X width)) (Height (Y height)) defaultPosition defaultPosition Set.empty)
         (zip lns [1 ..])
-    (Position startX startY _) = getStart maze
 
 main :: IO ()
 main = do

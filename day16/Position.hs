@@ -1,6 +1,6 @@
 module Position where
 
-import Data.Maybe (fromJust, isNothing)
+import Direction (Direction (..), clockwise, counterclockwise)
 import GHC.Generics (Generic)
 
 newtype X = X Int deriving (Eq, Generic, Ord, Num, Show)
@@ -10,27 +10,6 @@ newtype Width = Width X deriving (Eq, Ord, Show)
 newtype Y = Y Int deriving (Eq, Generic, Ord, Num, Show)
 
 newtype Height = Height Y deriving (Eq, Ord, Show)
-
-data Direction = North | South | East | West
-  deriving (Eq, Generic, Ord)
-
-instance Show Direction where
-  show North = "^"
-  show South = "v"
-  show East = ">"
-  show West = "<"
-
-clockwise :: Direction -> Direction
-clockwise North = East
-clockwise East = South
-clockwise South = West
-clockwise West = North
-
-counterclockwise :: Direction -> Direction
-counterclockwise North = West
-counterclockwise West = South
-counterclockwise South = East
-counterclockwise East = North
 
 data Action = Forward | Clockwise | Counterclockwise
   deriving (Eq, Ord, Show)
@@ -47,6 +26,12 @@ forward (Position x y (Just North)) = Position x (y - 1) (Just North)
 forward (Position x y (Just South)) = Position x (y + 1) (Just South)
 forward (Position x y (Just East)) = Position (x + 1) y (Just East)
 forward (Position x y (Just West)) = Position (x - 1) y (Just West)
+
+go :: Position -> Action -> Position
+go (Position x y Nothing) _ = error "No orientation"
+go p Forward = forward p
+go (Position x y (Just o)) Clockwise = Position x y (Just (clockwise o))
+go (Position x y (Just o)) Counterclockwise = Position x y (Just (counterclockwise o))
 
 facing :: Position -> Direction -> (Position, [Action])
 facing p direction = case getOrientation p of
