@@ -88,7 +88,7 @@ main = do
   -- print (part1 test7) -- Expected: 5078
   -- print (part1 test8) -- Expected: 21110
   -- print (part1 test9) -- Expected: 41210
-  -- print (part1 input) -- Expected: ? NOT: 124476,
+  print (part1 input) -- Expected: ? NOT: 124476,
   --
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
