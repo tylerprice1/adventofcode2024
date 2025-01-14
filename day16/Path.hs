@@ -118,8 +118,6 @@ instance Show Path where
         )
         ""
         [1 .. height]
-      ++ "\n"
-      ++ showListPretty visited
     where
       -- ++ "\n"
       -- ++ foldr (\a s -> show a ++ "\n" ++ s) "" actions
