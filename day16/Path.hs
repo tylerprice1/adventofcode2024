@@ -7,7 +7,7 @@ import Data.List (minimumBy)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust)
 import Data.Set qualified as Set
-import Debug.Trace (trace, traceShowId)
+-- import Debug.Trace (trace, traceShowId)
 import Direction (Direction (..))
 import Maze (Maze (..))
 import Position (Action (..), Height (..), Position (..), Width (..), X (..), Y (..), go, move, setOrientation)
