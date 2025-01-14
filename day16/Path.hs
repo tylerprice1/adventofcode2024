@@ -10,7 +10,7 @@ import Data.Set qualified as Set
 import Debug.Trace (trace, traceShowId)
 import Direction (Direction (..))
 import Maze (Maze (..))
-import Position (Action (..), Height (..), Position (..), Width (..), X (..), Y (..), go, move)
+import Position (Action (..), Height (..), Position (..), Width (..), X (..), Y (..), go, move, setOrientation)
 import Score (Score)
 
 data Path = Path Maze [Action]
@@ -66,18 +66,18 @@ explore maze =
 
 explore' :: Path -> Cache -> Visited -> Int -> (Maybe Path, Cache, Visited)
 explore' path cache visited depth
-  | depth > 37 = error ("Too deep " ++ "(" ++ show depth ++ ")" ++ "\n" ++ show path)
+  | depth > width * height = error ("Too deep " ++ "(" ++ show depth ++ ")" ++ "\n" ++ show path)
   | position == end = (Just path, Map.insert end path cache, visited')
   | path `Set.member` visited = (Nothing, cache, visited)
   | position `Set.member` walls = (Nothing, cache, visited')
-  | position `elem` history = (Nothing, cache, visited')
+  | (position `setOrientation` Nothing) `elem` history = (Nothing, cache, visited')
   | otherwise =
       let (Path maze actions) = case Map.lookup position cache of
             Nothing -> path
             Just path' -> minPath path path'
           (forwardPath, forwardCache, forwardVisited) = explore' (Path maze (Forward : actions)) cache visited' depth'
-          (clockwisePath, clockwiseCache, clockwiseVisited) = explore' (Path maze (Clockwise : actions)) forwardCache forwardVisited depth'
-          (counterclockwisePath, counterclockwiseCache, counterclockwiseVisited) = explore' (Path maze (Counterclockwise : actions)) clockwiseCache clockwiseVisited depth'
+          (clockwisePath, clockwiseCache, clockwiseVisited) = explore' (Path maze (Forward : Clockwise : actions)) forwardCache forwardVisited depth'
+          (counterclockwisePath, counterclockwiseCache, counterclockwiseVisited) = explore' (Path maze (Forward : Counterclockwise : actions)) clockwiseCache clockwiseVisited depth'
           maybePaths = [forwardPath, clockwisePath, counterclockwisePath]
           shortest = minimumMaybePath maybePaths
        in (shortest, Map.insert position path counterclockwiseCache, counterclockwiseVisited)
