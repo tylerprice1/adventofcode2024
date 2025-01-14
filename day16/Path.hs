@@ -7,7 +7,7 @@ import Data.List (minimumBy)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust)
 import Data.Set qualified as Set
-import Debug.Trace (traceShowId)
+import Debug.Trace (trace, traceShowId)
 import Direction (Direction (..))
 import Maze (Maze (..))
 import Position (Action (..), Height (..), Position (..), Width (..), X (..), Y (..), go, move)
@@ -26,10 +26,10 @@ type Cache = Map.Map Position Path
 type Visited = Set.Set Path
 
 getPositions :: Path -> [Position]
-getPositions (Path (Maze _ _ start _ _) actions) = reverse (foldr (\a (p : ps) -> (p `go` a) : p : ps) [start] actions)
+getPositions (Path (Maze _ _ start _ _) actions) = foldr (\a (p : ps) -> (p `go` a) : p : ps) [start] actions
 
 getPosition :: Path -> Position
-getPosition = head . getPositions
+getPosition (Path (Maze _ _ start _ _) actions) = foldr (flip go) start actions
 
 fromMaze :: Maze -> Path
 fromMaze maze = Path maze []
@@ -56,10 +56,13 @@ minimumMaybePath maybePaths =
 minimumPath :: [Path] -> Path
 minimumPath = minimumBy (compare `on` score)
 
+showListPretty :: (Show a) => [a] -> String
+showListPretty = foldr (\x s -> show x ++ "\n" ++ s) ""
+
 explore :: Maze -> Maybe Path
 explore maze =
-  let (p, _, _) = explore' (fromMaze maze) Map.empty Set.empty 0
-   in p
+  let (path, cache, visited) = explore' (fromMaze maze) Map.empty Set.empty 0
+   in trace (show path ++ "\n" ++ showListPretty (Map.toList cache) ++ "\n" ++ showListPretty (Set.toList visited)) (path)
 
 explore' :: Path -> Cache -> Visited -> Int -> (Maybe Path, Cache, Visited)
 explore' path cache visited depth = case Map.lookup position cache of
@@ -68,22 +71,22 @@ explore' path cache visited depth = case Map.lookup position cache of
      in (Just path, Map.insert position shorter cache, visited')
   Nothing
     | depth > width * height -> error ("Too deep " ++ "(" ++ show depth ++ ")" ++ "\n" ++ show path)
-    | path `Set.member` visited -> (Nothing, cache, visited)
-    | position `elem` positions -> (Nothing, cache, visited')
     | position == end -> (Just path, Map.insert end path cache, visited')
-    | position `Set.member` walls -> (Nothing, cache, visited')
+    | path `Set.member` visited -> (Nothing, cache, visited)
+    | position `Set.member` walls -> (Nothing, cache, visited)
+    | position `elem` history -> (Nothing, cache, visited')
     | otherwise ->
         let (forwardPath, forwardCache, forwardVisited) = explore' (Path maze (Forward : actions)) cache visited' depth'
             (clockwisePath, clockwiseCache, clockwiseVisited) = explore' (Path maze (Clockwise : actions)) forwardCache forwardVisited depth'
             (counterclockwisePath, counterclockwiseCache, counterclockwiseVisited) = explore' (Path maze (Counterclockwise : actions)) clockwiseCache clockwiseVisited depth'
             maybePaths = [forwardPath, clockwisePath, counterclockwisePath]
             shortest = minimumMaybePath maybePaths
-         in (shortest, counterclockwiseCache, counterclockwiseVisited)
+         in (shortest, Map.insert position path counterclockwiseCache, counterclockwiseVisited)
   where
     visited' = path `Set.insert` visited
     (Path maze actions) = path
     (Maze (Width (X width)) (Height (Y height)) _ end walls) = maze
-    (position : positions) = getPositions path
+    (position : history) = getPositions path
     depthStr = replicate depth ' '
     depth' = depth + 1
 
@@ -116,9 +119,10 @@ instance Show Path where
         )
         ""
         [1 .. height]
-      ++ "\n"
-      ++ foldr (\a s -> show a ++ "\n" ++ s) "" actions
     where
+      -- ++ "\n"
+      -- ++ foldr (\a s -> show a ++ "\n" ++ s) "" actions
+
       (Path maze actions) = path
       Maze (Width (X width)) (Height (Y height)) start end walls = maze
       visited = getPositions path
