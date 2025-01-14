@@ -10,6 +10,8 @@ import Maze (Maze (Maze, getEnd, getPosition, getStart), setPosition)
 import Position (Action (Forward), Direction (..), Height (..), Position (..), Width (..), X (..), Y (..), getOrientation, move, setOrientation)
 import Score (Score (..))
 
+-- trace a b = b
+
 type PositionPathCache = Map.Map Position Journey
 
 type Visited = Set.Set Position
@@ -126,43 +128,6 @@ shorterMaybe (Just a) Nothing = Just a
 shorterMaybe Nothing (Just b) = Just b
 shorterMaybe (Just a) (Just b) = Just (shorter a b)
 
-embark :: Maze -> Maybe Journey
-embark maze = journey
-  where
-    (journey, cache) = embark' (fromMaze maze) Map.empty Set.empty 0
-
-embark' :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
-embark' journey cache visited depth =
-  case position `Map.lookup` cache of
-    Just j ->
-      -- (Just j, cache)
-      let shortest = shorter journey j
-       in (Just shortest, Map.insert position shortest cache)
-    Nothing
-      | position == end ->
-          let journey' = Journey maze 0 [] [end]
-           in (Just journey', cache)
-      | position `Set.member` visited -> (Nothing, cache)
-      | position `Set.member` walls -> (Nothing, cache)
-      | depth >= (width * height) -> error ("Depth (" ++ show depth ++ ") is greater than area of maze" ++ "\n" ++ showJourneyWithVisited journey cache visited)
-      | otherwise ->
-          let (journey'', cache') = branch journey cache (position `Set.insert` visited) depth
-              journey' = Just . (position `consPath`) =<< journey''
-           in if position == start
-                then
-                  ( ( \j ->
-                        trace
-                          (showJourneyWithVisited j cache' (position `Set.insert` visited) ++ "\n" ++ "Cache:" ++ Map.foldrWithKey (\p j s -> show p ++ " " ++ show (getScore j) ++ "\n\t" ++ s) "\n\t" cache')
-                          (Just j)
-                    )
-                      =<< journey',
-                    maybe cache' (\j -> Map.insert position j cache') journey'
-                  )
-                else (journey', maybe cache' (\j -> Map.insert position j cache') journey')
-  where
-    Journey maze _ _ _ = journey
-    Maze (Width (X width)) (Height (Y height)) position start end walls = maze
-
 nextDirections :: Position -> [Direction]
 nextDirections (Position _ _ o) = case o of
   Just North -> [North, East, West]
@@ -174,16 +139,37 @@ nextDirections (Position _ _ o) = case o of
 nextPositions :: Position -> [(Position, [Action])]
 nextPositions position = map (position `move`) (nextDirections position)
 
+embark :: Maze -> Maybe Journey
+embark maze = journey
+  where
+    (journey, cache) = embark' (fromMaze maze) Map.empty Set.empty 0
+
+embark' :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
+embark' journey cache visited depth =
+  case position `Map.lookup` cache of
+    Just j ->
+      let shortest = shorter journey' j
+       in (Just shortest, Map.insert position shortest cache)
+    Nothing
+      | position == end -> trace (showJourneyWithVisited journey' cache visited) (Just journey', Map.insert position journey' cache)
+      | position `Set.member` visited -> (Nothing, cache)
+      | position `Set.member` walls -> (Nothing, cache)
+      | depth >= width * height -> error ("Depth (" ++ show depth ++ ") is greater than area of maze")
+      | otherwise ->
+          let (journey'', cache') = branch journey' cache (position `Set.insert` visited) depth
+           in (journey'', maybe cache' (\j -> Map.insert position j cache') journey'')
+  where
+    Journey maze _ _ _ = journey
+    journey' = position `consPath` journey
+    Maze (Width (X width)) (Height (Y height)) position start end walls = maze
+
 branch :: Journey -> PositionPathCache -> Visited -> Int -> CompletedJourney
 branch journey cache visited depth = (foldr shorterMaybe Nothing maybeJourneys, cache')
   where
-    position = getMazePosition journey
     depth' = depth + 1
     fn :: (Position, [Action]) -> ([Maybe Journey], PositionPathCache) -> ([Maybe Journey], PositionPathCache)
-    fn (movedPosition, actions) (maybeJourneys, cache) =
-      let movedJourneyStart = journey `setMazePosition` movedPosition
-          (maybeMovedJourneyEnd', cache') = embark' movedJourneyStart cache visited depth'
-          maybeMovedJourneyEnd = (Just . (actions `updateScore`)) =<< maybeMovedJourneyEnd'
-       in (maybeMovedJourneyEnd : maybeJourneys, cache')
+    fn (position, actions) (maybeJourneys, cache) =
+      let (maybeJourney, cache') = embark' (actions `updateScore` journey `setMazePosition` position) cache visited depth'
+       in (maybeJourney : maybeJourneys, cache')
 
-    (maybeJourneys, cache') = foldr fn ([], cache) (nextPositions position)
+    (maybeJourneys, cache') = foldr fn ([], cache) (nextPositions (getMazePosition journey))
