@@ -79,12 +79,12 @@ main = do
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  print (part1 test) -- Expected: 7036
-  print (part1 test2) -- Expected: 11048
-  print (part1 test3) -- Expected: 1004
-  print (part1 test4) -- Expected: 3010
-  print (part1 test5) -- Expected: 4013
-  print (part1 test6) -- Expected: 21148
+  -- print (part1 test) -- Expected: 7036
+  -- print (part1 test2) -- Expected: 11048
+  -- print (part1 test3) -- Expected: 1004
+  -- print (part1 test4) -- Expected: 3010
+  -- print (part1 test5) -- Expected: 4013
+  -- print (part1 test6) -- Expected: 21148
   -- print (part1 test7) -- Expected: 5078
   -- print (part1 test8) -- Expected: 21110
   -- print (part1 test9) -- Expected: 41210

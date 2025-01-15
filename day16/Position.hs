@@ -1,21 +1,23 @@
 module Position where
 
 import Direction (Direction (..), clockwise, counterclockwise)
-import GHC.Generics (Generic)
 
-newtype X = X Int deriving (Eq, Generic, Ord, Num, Show)
+newtype X = X Int
+  deriving (Eq, Ord, Num, Show)
 
-newtype Width = Width X deriving (Eq, Ord, Show)
+newtype Width = Width X
+  deriving (Eq, Ord, Show)
 
-newtype Y = Y Int deriving (Eq, Generic, Ord, Num, Show)
+newtype Y = Y Int
+  deriving (Eq, Ord, Num, Show)
 
-newtype Height = Height Y deriving (Eq, Ord, Show)
+newtype Height = Height Y
+  deriving (Eq, Ord, Show)
 
 data Action = Forward | Clockwise | Counterclockwise
   deriving (Eq, Ord, Show)
 
 data Position = Position {getX :: X, getY :: Y, getOrientation :: Maybe Direction}
-  deriving (Generic)
 
 setOrientation :: Position -> Maybe Direction -> Position
 setOrientation (Position x y _) = Position x y
@@ -32,22 +34,6 @@ go (Position x y Nothing) _ = error "No orientation"
 go p Forward = forward p
 go (Position x y (Just o)) Clockwise = Position x y (Just (clockwise o))
 go (Position x y (Just o)) Counterclockwise = Position x y (Just (counterclockwise o))
-
-facing :: Position -> Direction -> (Position, [Action])
-facing p direction = case getOrientation p of
-  Just o
-    | o == direction -> (p, [])
-    | clockwise o == direction -> (p', [Clockwise])
-    | counterclockwise o == direction -> (p', [Counterclockwise])
-    | otherwise -> (p', [Clockwise, Clockwise])
-  Nothing -> error "No orientation"
-  where
-    p' = p `setOrientation` Just direction
-
-move :: Position -> Direction -> (Position, [Action])
-move p direction =
-  let (p', actions) = p `facing` direction
-   in (forward p', actions ++ [Forward])
 
 instance Eq Position where
   (==) :: Position -> Position -> Bool
