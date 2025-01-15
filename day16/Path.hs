@@ -1,100 +1,102 @@
 module Path (explore) where
 
-import Control.Applicative ((<|>))
-import Control.Parallel (par, pseq)
 import Data.Function (on)
 import Data.List (minimumBy)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust)
 import Data.Set qualified as Set
--- import Debug.Trace (trace, traceShowId)
 import Direction (Direction (..))
+import GHC.Base (maxInt)
 import Maze (Maze (..))
 import Position (Action (..), Height (..), Position (..), Width (..), X (..), Y (..), go, move, setOrientation)
-import Score (Score)
+import Score (Score (..))
 
-data Path = Path Maze [Action] [Position]
-  deriving (Eq)
+data Path = Path Maze Score Position [Position]
 
 instance Ord Path where
-  compare (Path mazeA actionsA _) (Path mazeB actionsB _) = case compare actionsA actionsB of
-    EQ -> compare mazeA mazeB
-    other -> other
+  compare (Path mazeA scoreA positionA positionsA) (Path mazeB scoreB positionB positionsB) =
+    case compare scoreA scoreB of
+      EQ -> case compare positionA positionB of
+        EQ -> EQ
+        other -> other
+      other -> other
+
+instance Eq Path where
+  (==) a b = compare a b == EQ
 
 type Cache = Map.Map Position Path
 
-type Visited = Set.Set Path
+type Visited = Set.Set (Position, Score, Int)
 
-consAction action (Path m actions positions) = Path m (action : actions) ((head positions `go` action) : positions)
-
-getPositions :: Path -> [Position]
-getPositions (Path _ _ positions) = positions
-
-getPosition :: Path -> Position
-getPosition (Path _ _ (p : _)) = p
-
-fromMaze :: Maze -> Path
-fromMaze maze = Path maze [] [getStart maze]
-
-score :: Path -> Score
-score (Path _ actions _) = foldr (\a s -> actionScore a + s) 0 actions
+consAction action (Path m s position positions) = Path m (s + actionScore action) (position `go` action) (position : positions)
   where
     actionScore :: Action -> Score
     actionScore Forward = 1
     actionScore _ = 1_000
 
-minPath :: Path -> Path -> Path
-minPath a b = minimumBy (compare `on` score) [a, b]
+getPosition :: Path -> Position
+getPosition (Path _ _ p _) = p
 
-min3Path :: Path -> Path -> Path -> Path
-min3Path a b c = minimumBy (compare `on` score) [a, b, c]
+fromMaze :: Maze -> Path
+fromMaze maze = Path maze 0 (getStart maze) []
+
+getScore :: Path -> Score
+getScore (Path _ s _ _) = s
+
+minPath :: Path -> Path -> Path
+minPath a b = if getScore a <= getScore b then a else b
+
+minMaybePath :: Maybe Path -> Maybe Path -> Maybe Path
+minMaybePath Nothing Nothing = Nothing
+minMaybePath Nothing (Just b) = Just b
+minMaybePath (Just a) Nothing = Just a
+minMaybePath (Just a) (Just b) = Just (minPath a b)
 
 minimumMaybePath :: [Maybe Path] -> Maybe Path
 minimumMaybePath maybePaths =
   case catMaybes maybePaths of
     [] -> Nothing
-    paths -> Just (minimumBy (compare `on` score) paths)
-
-minimumPath :: [Path] -> Path
-minimumPath = minimumBy (compare `on` score)
+    paths -> Just (minimumBy (compare `on` getScore) paths)
 
 showListPretty :: (Show a) => [a] -> String
 showListPretty = foldr (\x s -> show x ++ "\n" ++ s) ""
 
 explore :: Maze -> Maybe Path
 explore maze =
-  let (path, cache, visited) = explore' (fromMaze maze) Map.empty Set.empty 0
-   in {- trace (show path ++ "\n" ++ showListPretty (Map.toList cache) ++ "\n" ++ showListPretty (Set.toList visited)) -} path
+  let (path, _, _, _) = explore' (fromMaze maze) Map.empty Set.empty (Score maxInt) 0
+   in path
 
-explore' :: Path -> Cache -> Visited -> Int -> (Maybe Path, Cache, Visited)
-explore' path cache visited depth
+explore' :: Path -> Cache -> Visited -> Score -> Int -> (Maybe Path, Cache, Visited, Score)
+explore' path cache visited minScore depth
   | depth > width * height = error ("Too deep " ++ "(" ++ show depth ++ ")" ++ "\n" ++ show path)
-  | position == end = (Just path, Map.insert end path cache, visited')
-  | path `Set.member` visited = (Nothing, cache, visited)
-  | position `Set.member` walls = (Nothing, cache, visited')
-  | (position `setOrientation` Nothing) `elem` history = (Nothing, cache, visited')
+  | score >= minScore = (Nothing, cache, visited, minScore)
+  | position == end = (Just path, Map.insert end path cache, visited, min minScore score)
+  | position `Set.member` walls = (Nothing, cache, visited, minScore)
+  | (position, score, depth) `Set.member` visited = (Nothing, cache, visited, minScore)
+  | (position `setOrientation` Nothing) `elem` history = (Nothing, cache, visited, minScore)
   | otherwise =
-      let path' = case Map.lookup position cache of
-            Nothing -> path
-            Just path' -> minPath path path'
-          (forwardPath, forwardCache, forwardVisited) = explore' (Forward `consAction` path') cache visited' depth'
-          (clockwisePath, clockwiseCache, clockwiseVisited) = explore' (Forward `consAction` (Clockwise `consAction` path')) forwardCache forwardVisited depth'
-          (counterclockwisePath, counterclockwiseCache, counterclockwiseVisited) = explore' (Forward `consAction` (Counterclockwise `consAction` path')) clockwiseCache clockwiseVisited depth'
-          maybePaths = [forwardPath, clockwisePath, counterclockwisePath]
-          shortest = minimumMaybePath maybePaths
-       in (shortest, Map.insert position path counterclockwiseCache, counterclockwiseVisited)
+      let path' = maybe path (minPath path) (Map.lookup position cache)
+       in foldr
+            ( \path (maybeShortest, cache, visited, minScore) ->
+                let (path', cache', visited', minScore') = explore' path cache visited minScore depth'
+                    maybeShortest' = minMaybePath path' maybeShortest
+                 in (maybeShortest', cache', visited', minScore')
+            )
+            (Nothing, cache, visited', minScore)
+            [ Forward `consAction` path',
+              Forward `consAction` (Clockwise `consAction` path'),
+              Forward `consAction` (Counterclockwise `consAction` path')
+            ]
   where
-    visited' = path `Set.insert` visited
-    (Path maze _ _) = path
+    visited' = (position, score, depth) `Set.insert` visited
+    (Path maze score position history) = path
     (Maze (Width (X width)) (Height (Y height)) _ end walls) = maze
-    positions = getPositions path
-    (position : history) = positions
     depthStr = replicate depth ' '
     depth' = depth + 1
 
 instance Show Path where
   show path =
-    show (score path)
+    show score
       ++ "\n"
       ++ foldr
         ( \y s ->
@@ -125,7 +127,7 @@ instance Show Path where
       -- ++ "\n"
       -- ++ foldr (\a s -> show a ++ "\n" ++ s) "" actions
 
-      (Path maze actions _) = path
+      (Path maze score _ positions) = path
       Maze (Width (X width)) (Height (Y height)) start end walls = maze
-      visited = getPositions path
+      visited = positions
       visitedMap = Map.fromList (map (\(Position x y o) -> (Position x y Nothing, Position x y o)) visited)
