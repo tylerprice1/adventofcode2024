@@ -8,14 +8,46 @@ import Data.List (minimumBy)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, isNothing)
 import Data.Set qualified as Set
+import Debug.Trace (trace)
+import Dijkstra (dijkstra)
 import Direction (Direction (..))
 import GHC.Base (maxInt)
 import GHC.Generics (Generic)
 import Maze (Maze (..))
 import Path (explore)
-import Position (Height (..), Position (..), Width (..), X (..), Y (..))
+import Position (Height (..), Position (..), Width (..), X (..), Y (..), setOrientation)
 
-part1 = explore
+showMazeWithPath maze path =
+  foldr
+    ( \y s ->
+        foldr
+          ( \x s ->
+              ( let p = Position (X x) (Y y) Nothing
+                    ch
+                      | p == start = 'S'
+                      | p == end = 'E'
+                      | p `Set.member` walls = '#'
+                      | otherwise = case p `Map.lookup` pathMap of
+                          Nothing -> '.'
+                          Just p' -> maybe 'O' (head . show) (getOrientation p')
+                 in ch
+              )
+                : s
+          )
+          ""
+          [1 .. width]
+          ++ "\n"
+          ++ s
+    )
+    ""
+    [1 .. height]
+  where
+    Maze (Width (X width)) (Height (Y height)) start end walls = maze
+    pathMap = Map.fromList (map (\p -> (p `setOrientation` Nothing, p)) path)
+
+part1 maze =
+  let (score, path) = dijkstra maze
+   in trace ("\n\n\n\n" ++ showMazeWithPath maze path) (score)
 
 part2 :: Maze -> Maze
 part2 input = input
@@ -79,15 +111,15 @@ main = do
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  -- print (part1 test) -- Expected: 7036
-  -- print (part1 test2) -- Expected: 11048
-  -- print (part1 test3) -- Expected: 1004
-  -- print (part1 test4) -- Expected: 3010
-  -- print (part1 test5) -- Expected: 4013
-  -- print (part1 test6) -- Expected: 21148
-  -- print (part1 test7) -- Expected: 5078
-  -- print (part1 test8) -- Expected: 21110
-  -- print (part1 test9) -- Expected: 41210
+  print (part1 test) -- Expected: 7036
+  print (part1 test2) -- Expected: 11048
+  print (part1 test3) -- Expected: 1004
+  print (part1 test4) -- Expected: 3010
+  print (part1 test5) -- Expected: 4013
+  print (part1 test6) -- Expected: 21148
+  print (part1 test7) -- Expected: 5078
+  print (part1 test8) -- Expected: 21110
+  print (part1 test9) -- Expected: 41210
   print (part1 input) -- Expected: ? NOT: 124476,
   --
   -- putStrLn "\n----- Part 2 -----"

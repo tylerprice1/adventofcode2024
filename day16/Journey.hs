@@ -5,9 +5,10 @@ import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromJust)
 import Data.Set qualified as Set
 import Debug.Trace (trace)
+import Direction (Direction (..))
 import GHC.Base (maxInt)
-import Maze (Maze (Maze, getEnd, getPosition, getStart), setPosition)
-import Position (Action (Forward), Direction (..), Height (..), Position (..), Width (..), X (..), Y (..), getOrientation, move, setOrientation)
+import Maze (Maze (Maze))
+import Position (Action, Height (Height), Position (Position), Width (Width), X (X), Y (Y))
 import Score (Score (..))
 
 -- trace a b = b
@@ -61,7 +62,7 @@ instance Show Journey where
       -- ++ (foldr (\a s -> show a ++ "\n" ++ s) "" actions)
 
       (Journey maze score actions path) = journey
-      Maze (Width (X width)) (Height (Y height)) position start end walls = maze
+      Maze (Width (X width)) (Height (Y height)) start end walls = maze
       pathMap = Map.fromList (map (\p -> (p `setOrientation` Nothing, p)) path)
 
 showJourneyWithVisited journey cache visited =
@@ -99,7 +100,7 @@ showJourneyWithVisited journey cache visited =
     -- ++ (foldr (\a s -> show a ++ "\n" ++ s) "" actions)
 
     (Journey maze score actions path) = journey
-    Maze (Width (X width)) (Height (Y height)) position start end walls = maze
+    Maze (Width (X width)) (Height (Y height)) start end walls = maze
     pathMap = Map.fromList (map (\p -> (p `setOrientation` Nothing, p)) path)
 
 fromMaze :: Maze -> Journey
@@ -161,7 +162,7 @@ embark' journey cache visited depth =
   where
     Journey maze _ _ _ = journey
     journey' = position `consPath` journey
-    Maze (Width (X width)) (Height (Y height)) position start end walls = maze
+    Maze (Width (X width)) (Height (Y height)) start end walls = maze
 
 branch :: Journey -> PositionJourneyCache -> Visited -> Int -> CompletedJourney
 branch journey cache visited depth = (foldr shorterMaybe Nothing maybeJourneys, cache')
