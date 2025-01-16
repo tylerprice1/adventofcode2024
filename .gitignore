@@ -134,6 +134,7 @@ dist-newstyle
 **/main
 **/*.hi
 **/*.o
+**/*.hp
 
 # Other
 debug.txt

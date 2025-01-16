@@ -1,10 +1,10 @@
-module Dijkstra (dijkstra) where
+module Dijkstra (dijkstra, getPath, getPaths) where
 
 import Data.Function (on)
 import Data.Heap qualified as Heap
 import Data.List (minimumBy)
 import Data.Map qualified as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 import Data.Set qualified as Set
 import Debug.Trace (trace, traceShow, traceShowId)
 import Direction (Direction (..), clockwise, counterclockwise)
@@ -18,7 +18,7 @@ type Visited = Set.Set Position
 
 type ScoreMap = Map.Map Position Score
 
-type PreviousMap = Map.Map Position (Maybe Position)
+type PreviousMap = Map.Map Position (Maybe [Position])
 
 -- 1  S ← empty sequence
 -- 2  u ← target
@@ -29,9 +29,18 @@ type PreviousMap = Map.Map Position (Maybe Position)
 getPath :: Position -> PreviousMap -> [Position]
 getPath position previousMap = case Map.lookup position previousMap of
   Nothing -> []
-  Just maybePrev -> maybe [position] (\prev -> position : getPath prev previousMap) maybePrev
+  Just maybePrev -> maybe [position] (\(prev : _) -> position : getPath prev previousMap) maybePrev
 
-dijkstra :: Maze -> (Score, [Position])
+getPaths :: Position -> PreviousMap -> [[Position]]
+getPaths position previousMap = case Map.lookup position previousMap of
+  Nothing -> []
+  Just maybePrevs ->
+    maybe
+      [[position]]
+      (concatMap (\prev -> map (\p -> position : (prev : p)) (prev `getPaths` previousMap)))
+      maybePrevs
+
+dijkstra :: Maze -> (Score, [[Position]])
 dijkstra maze =
   let Maze (Width (X width)) (Height (Y height)) start end walls = maze
       -- for each vertex v in Graph.Vertices:
@@ -77,8 +86,8 @@ dijkstra maze =
       endEast = end `setOrientation` Just East
       endSouth = end `setOrientation` Just South
       endWest = end `setOrientation` Just West
-      minEnd = minimumBy (compare `on` (Map.!) scoreMap') (traceShow (map ((Map.!) scoreMap') [end, endNorth, endEast, endSouth, endWest]) [end, endNorth, endEast, endSouth, endWest])
-   in ((Map.!) scoreMap' minEnd, getPath minEnd previousMap')
+      minEnd = minimumBy (compare `on` (Map.!) scoreMap') [end, endNorth, endEast, endSouth, endWest]
+   in ((Map.!) scoreMap' minEnd, getPaths minEnd previousMap')
 
 dijkstra' :: Maze -> PriorityQueue -> Visited -> ScoreMap -> PreviousMap -> (ScoreMap, PreviousMap)
 dijkstra' maze unvisited visited scoreMap previousMap = case Heap.view unvisited of
@@ -98,7 +107,7 @@ dijkstra' maze unvisited visited scoreMap previousMap = case Heap.view unvisited
         (fUnvisited, fScoreMap, fPreviousMap) = updatePosition currPosition f (currScore + 1) unvisited' visited' scoreMap previousMap
         (cwUnvisited, cwScoreMap, cwPreviousMap) = updatePosition currPosition cw (currScore + 1000) fUnvisited visited' fScoreMap fPreviousMap
         (ccwUnvisited, ccwScoreMap, ccwPreviousMap) = updatePosition currPosition ccw (currScore + 1000) cwUnvisited visited' cwScoreMap cwPreviousMap
-     in dijkstra' maze ccwUnvisited (visited') ccwScoreMap ccwPreviousMap
+     in dijkstra' maze ccwUnvisited visited' ccwScoreMap ccwPreviousMap
 
 heapMember :: Position -> PriorityQueue -> Bool
 heapMember position heap
@@ -118,5 +127,10 @@ updatePosition prevPosition position score queue visited scoreMap previousMap
           if score < oldScore
             -- dist[v] ← alt
             -- prev[v] ← u
-            then (Heap.insert (score, position) queue, Map.insert position score scoreMap, Map.insert position (Just prevPosition) previousMap)
-            else (queue, scoreMap, previousMap)
+            then (Heap.insert (score, position) queue, Map.insert position score scoreMap, Map.insert position (Just [prevPosition]) previousMap)
+            else
+              if score == oldScore
+                then
+                  (queue, scoreMap, Map.insert position (Just (prevPosition : fromMaybe [] (Map.findWithDefault (Just []) position previousMap))) previousMap)
+                else
+                  (queue, scoreMap, previousMap)
