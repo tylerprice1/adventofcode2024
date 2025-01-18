@@ -159,7 +159,7 @@ executeOne program = case instructions `atMay` ip of
 execute :: Program -> Program
 execute program = case instructions `atMay` ip of
   Nothing -> Program computer ip instructions (reverse output)
-  Just (ADV (Combo operand)) -> execute (Program (Computer (Register (a `div` (2 ^ comboValue operand))) registerB registerC) nextIp instructions output)
+  Just (ADV (Combo operand)) -> execute (Program (Computer (Register (a `div` 2 ^ comboValue operand)) registerB registerC) nextIp instructions output)
   Just (BXL (Literal operand)) -> execute (Program (Computer registerA (Register (b `xor` operand)) registerC) nextIp instructions output)
   Just (BST (Combo operand)) -> execute (Program (Computer registerA (Register (comboValue operand `mod` 8)) registerC) nextIp instructions output)
   Just (JNZ (Literal operand))
@@ -167,8 +167,8 @@ execute program = case instructions `atMay` ip of
     | otherwise -> execute (program `setInstructionPointer` operand)
   Just (BXC (NoOp operand)) -> execute (Program (Computer registerA (Register (b `xor` c)) registerC) nextIp instructions output)
   Just (OUT (Combo operand)) -> execute (Program computer nextIp instructions (comboValue operand `mod` 8 : output))
-  Just (BDV (Combo operand)) -> execute (Program (Computer registerA (Register (a `div` (2 ^ comboValue operand))) registerC) nextIp instructions output)
-  Just (CDV (Combo operand)) -> execute (Program (Computer registerA registerB (Register (a `div` (2 ^ comboValue operand)))) nextIp instructions output)
+  Just (BDV (Combo operand)) -> execute (Program (Computer registerA (Register (a `div` 2 ^ comboValue operand)) registerC) nextIp instructions output)
+  Just (CDV (Combo operand)) -> execute (Program (Computer registerA registerB (Register (a `div` 2 ^ comboValue operand))) nextIp instructions output)
   where
     Program computer ip instructions output = program
     Computer registerA registerB registerC = computer
@@ -195,32 +195,44 @@ padLen len fill str =
       diff = len - l
    in replicate diff fill ++ str
 
-findA :: Program -> Int
-findA input =
-  foldr
-    ( \(i, place) result ->
-        traceShow
-          ( i,
-            showOct place "",
-            result,
-            take 5 (map (`showOct` "") range_0_999_octal),
-            drop ((8 ^ 3) - 5) (map (`showOct` "") range_0_999_octal),
-            take 5 (map (\i -> showOct (place + i * (place `div` (8 ^ 3))) "") range_0_999_octal),
-            drop ((8 ^ 3) - 5) (map (\i -> showOct (place + i * (place `div` (8 ^ 3))) "") range_0_999_octal),
-            findRange i (map (\i -> place + i * (place `div` (8 ^ 3))) range_0_999_octal) -- (execute (input `setA` (i * place)))
-          )
-          result
-    )
-    0
-    (zip ints (map (8 ^) [0 ..]))
+range :: [Int] -> [Int]
+range instructions =
+  let start = (8 ^ (length instructions - 1))
+      end = (8 * start - 1)
+   in trace ("Range for " ++ show instructions ++ ": " ++ show [start - 1 .. end]) [start - 1 .. end]
+
+findA :: Program -> [Int]
+findA input = traceShowId (findA' ints input)
   where
     ints = instructionsToInts (getInstructions input)
-    range_0_999_octal = [0 .. (8 ^ 3) - 1]
+    -- foldr (\(instruction, index) result -> traceShow (instruction, findAsOutputting [instruction] input) result) 0 (zip ints [0 ..])
 
-    findRange :: Int -> [Int] -> Maybe Int
-    findRange i = find (\a -> i == (head . getOutput . execute) (input `setA` a))
+    findA' :: [Int] -> Program -> [Int]
+    findA' [] _ = []
+    findA' (first : rest) program = case trace (show [first] ++ " -> " ++ show (findAsOutputting [first] program)) (findAsOutputting [first] program) of
+      [] -> error ("No match for " ++ show first)
+      (first' : _) -> (first' : (findA' rest program))
 
-part2 input = findA input
+    findAsOutputting :: [Int] -> Program -> [Int]
+    findAsOutputting output program =
+      filter
+        ( \a ->
+            trace
+              ( "A (octal): "
+                  ++ showOct a ""
+                  ++ " | Actual: "
+                  ++ show ((getOutput . execute) (program `setA` a))
+                  ++ " | Expected: "
+                  ++ show output
+              )
+              (output == (getOutput . execute) (program `setA` a))
+        )
+        (range output)
+
+    findRange :: Int -> Program -> [Int] -> Maybe Int
+    findRange i program = find (\a -> i == (head . getOutput . execute) (program `setA` a))
+
+part2 = findA
 
 -- find
 --   ( \a ->
@@ -228,15 +240,36 @@ part2 input = findA input
 --        in trace
 --             ( padLen 16 ' ' (show result)
 --                 ++ " "
---                 ++ padLen 8 ' ' (showOct a "")
+--                 ++ padLen 16 ' ' (showOct a "")
 --                 ++ " "
---                 ++ padLen 8 ' ' (show a)
+--                 ++ padLen 16 ' ' (show a)
 --                 ++ " "
 --                 ++ show is
 --             )
 --             (is == result)
 --   )
---   (trace (show start ++ " - " ++ show end) [1 .. 10000 {- [start, start + (end - start) `div` 700 .. end] -}]) -- ([start, start + 8 .. end])) -- [start, start + (2 ^ (length is)) .. end])
+--   ( trace
+--       ( "Answer in octal range: "
+--           ++ showOct start ""
+--           ++ " - "
+--           ++ showOct end ""
+--           ++ " ("
+--           ++ "decimal: "
+--           ++ show start
+--           ++ " - "
+--           ++ show end
+--           ++ ")"
+--           ++ "\n"
+--           ++ padLen 16 ' ' "OUTPUT"
+--           ++ " "
+--           ++ padLen 16 ' ' "A (OCTAL)"
+--           ++ " "
+--           ++ padLen 16 ' ' "A (DECIMAL)"
+--           ++ " "
+--           ++ "INPUT"
+--       )
+--       [0 .. 7 {- [start, start + (end - start) `div` 700 .. end] -}] -- ([start, start + 8 .. end])) -- [start, start + (2 ^ (length is)) .. end])
+--   )
 -- where
 --   instructions = getInstructions input
 --   is = instructionsToInts instructions
@@ -244,8 +277,6 @@ part2 input = findA input
 --   range instructions =
 --     let start = (8 ^ (length is - 1))
 --      in (start, 8 * start - 1)
-
--- findA program
 
 main = do
   testFile <- readFile "./test.txt"
@@ -265,5 +296,6 @@ main = do
   print (part1 test) -- Expected: 4,6,3,5,6,3,5,2,1,0
   print (part1 input) -- Expected: 6,7,5,2,1,3,5,1,7
   putStrLn "\n----- Part 2 -----"
-  -- print (part2 test2) -- Expected: 117440
-  print (part2 input) -- Expected: ?
+  mapM_ print (map (\a -> (a, getOutput (execute (test2 `setA` a)))) [0 .. 63])
+  print (part2 test2) -- Expected: 117440
+  -- print (part2 input) -- Expected: ?
