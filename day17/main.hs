@@ -232,51 +232,15 @@ findA input = traceShowId (findA' ints input)
     findRange :: Int -> Program -> [Int] -> Maybe Int
     findRange i program = find (\a -> i == (head . getOutput . execute) (program `setA` a))
 
-part2 = findA
-
--- find
---   ( \a ->
---       let result = (getOutput . execute) (input `setA` a)
---        in trace
---             ( padLen 16 ' ' (show result)
---                 ++ " "
---                 ++ padLen 16 ' ' (showOct a "")
---                 ++ " "
---                 ++ padLen 16 ' ' (show a)
---                 ++ " "
---                 ++ show is
---             )
---             (is == result)
---   )
---   ( trace
---       ( "Answer in octal range: "
---           ++ showOct start ""
---           ++ " - "
---           ++ showOct end ""
---           ++ " ("
---           ++ "decimal: "
---           ++ show start
---           ++ " - "
---           ++ show end
---           ++ ")"
---           ++ "\n"
---           ++ padLen 16 ' ' "OUTPUT"
---           ++ " "
---           ++ padLen 16 ' ' "A (OCTAL)"
---           ++ " "
---           ++ padLen 16 ' ' "A (DECIMAL)"
---           ++ " "
---           ++ "INPUT"
---       )
---       [0 .. 7 {- [start, start + (end - start) `div` 700 .. end] -}] -- ([start, start + 8 .. end])) -- [start, start + (2 ^ (length is)) .. end])
---   )
--- where
---   instructions = getInstructions input
---   is = instructionsToInts instructions
---   (start, end) = range is
---   range instructions =
---     let start = (8 ^ (length is - 1))
---      in (start, 8 * start - 1)
+part2 :: Program -> Maybe Int
+part2 input = find (\a -> is == (getOutput . execute) (input `setA` a)) [start .. end]
+  where
+    instructions = getInstructions input
+    is = instructionsToInts instructions
+    (start, end) = range is
+    range instructions =
+      let start = (8 ^ (length instructions - 1))
+       in (start - 1, 8 * start - 1)
 
 main = do
   testFile <- readFile "./test.txt"
