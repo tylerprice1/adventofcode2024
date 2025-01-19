@@ -137,6 +137,7 @@ dist-newstyle
 **/*.hp
 
 # Other
+**/*.out
 debug.txt
 
 **/.DS_Store
