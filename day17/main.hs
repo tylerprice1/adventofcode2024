@@ -93,7 +93,7 @@ setInstructionPointer :: Program -> InstructionPointer -> Program
 setInstructionPointer (Program c _ is out) ip = Program c ip is out
 
 run :: Program -> Program
-run program = case (Vector.!?) instructions ip of
+run program = case trace (show program) ((Vector.!?) instructions ip) of
   Nothing -> Program computer ip instructions (reverse output)
   Just (ADV (Combo operand)) -> run (Program (computer `setA` aDiv operand) nextIp instructions output)
   Just (BDV (Combo operand)) -> run (Program (computer `setB` aDiv operand) nextIp instructions output)
@@ -180,7 +180,7 @@ main = do
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  print (part1 test) -- Expected: 4,6,3,5,6,3,5,2,1,0
+  -- print (part1 test) -- Expected: 4,6,3,5,6,3,5,2,1,0
   print (part1 input) -- Expected: 6,7,5,2,1,3,5,1,7
   --
   -- putStrLn "\n----- Part 2 -----"
