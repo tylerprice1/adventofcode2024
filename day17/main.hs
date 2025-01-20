@@ -1,14 +1,15 @@
 import Data.Bits (xor)
 import Data.List (find)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust)
 -- import Numeric (readOct, showIntAtBase, showOct)
 
-import Data.Vector qualified as Vector
-import Debug.Trace (trace)
+-- import Debug.Trace (trace, traceShowId)
 import Numeric (showOct)
 import Safe (atMay)
 import Text.Parsec (char, digit, letter, many, many1, newline, optionMaybe, optional, parse, spaces, string)
 import Text.Parsec.String (Parser)
+
+trace a b = b
 
 padStart :: Int -> Char -> String -> String
 padStart len fill str =
@@ -19,7 +20,9 @@ padStart len fill str =
 data Computer = Computer {getA :: Int, getB :: Int, getC :: Int}
 
 instance Show Computer where
-  show (Computer a b c) = "Computer(" ++ padStart 12 ' ' (showOct a "") ++ ", " ++ padStart 12 ' ' (showOct b "") ++ ", " ++ padStart 12 ' ' (showOct c "") ++ ")"
+  show (Computer a b c) = "Computer(" ++ padStart len ' ' (showOct a "") ++ ", " ++ padStart len ' ' (showOct b "") ++ ", " ++ padStart len ' ' (showOct c "") ++ ")"
+    where
+      len = max 4 (length (show (max a (max b c))))
 
 newtype Combo = Combo Int
 
@@ -60,14 +63,14 @@ instructionsToInts ((CDV (Combo o)) : is) = 7 : o : instructionsToInts is
 
 type InstructionPointer = Int
 
-data Program = Program {getComputer :: Computer, getInstructionPointer :: InstructionPointer, getInstructions :: Vector.Vector Instruction, getOutput :: [Int]}
+data Program = Program {getComputer :: Computer, getInstructionPointer :: InstructionPointer, getInstructions :: [Instruction], getOutput :: [Int]}
 
 instance Show Program where
   show (Program computer instructionPointer instructions output) =
     "Program( "
       ++ show computer
       ++ ", "
-      ++ show ((Vector.!?) instructions instructionPointer)
+      ++ padStart 12 ' ' (show (instructions `atMay` instructionPointer))
       ++ ", "
       ++ show output
       ++ " )"
@@ -92,81 +95,85 @@ setComputer (Program _ ip is out) c = Program c ip is out
 setInstructionPointer :: Program -> InstructionPointer -> Program
 setInstructionPointer (Program c _ is out) ip = Program c ip is out
 
+execute :: Program -> Program
+execute program = case {- trace (show program) -} instructions `atMay` ip of
+  Nothing -> error "No instruction"
+  Just (ADV (Combo operand)) -> Program (computer `setA` aDiv operand) nextIp instructions output
+  Just (BDV (Combo operand)) -> Program (computer `setB` aDiv operand) nextIp instructions output
+  Just (CDV (Combo operand)) -> Program (computer `setC` aDiv operand) nextIp instructions output
+  Just (BST (Combo operand)) -> Program (computer `setB` (comboValue operand `mod` 8)) nextIp instructions output
+  Just (OUT (Combo operand)) -> Program computer nextIp instructions (comboValue operand `mod` 8 : output)
+  Just (BXC _) -> Program (computer `setB` (b `xor` c)) nextIp instructions output
+  Just (BXL (Literal operand)) -> Program (computer `setB` (b `xor` operand)) nextIp instructions output
+  Just (JNZ (Literal operand))
+    | a == 0 -> program `setInstructionPointer` nextIp
+    | otherwise -> program `setInstructionPointer` operand
+  where
+    !(Program (!computer) (!ip) (!instructions) (!output)) = program
+    !(Computer (!a) (!b) (!c)) = computer
+    !nextIp = ip + 1
+
+    aDiv :: Int -> Int
+    aDiv operand = a `div` 2 ^ comboValue operand
+
+    comboValue :: Int -> Int
+    comboValue 0 = 0
+    comboValue 1 = 1
+    comboValue 2 = 2
+    comboValue 3 = 3
+    comboValue 4 = a
+    comboValue 5 = b
+    comboValue 6 = c
+    comboValue 7 = error "Reserved"
+
 run :: Program -> Program
-run program = case trace (show program) ((Vector.!?) instructions ip) of
+run program = case {- trace (show program) -} instructions `atMay` ip of
   Nothing -> Program computer ip instructions (reverse output)
-  Just (ADV (Combo operand)) -> run (Program (computer `setA` aDiv operand) nextIp instructions output)
-  Just (BDV (Combo operand)) -> run (Program (computer `setB` aDiv operand) nextIp instructions output)
-  Just (CDV (Combo operand)) -> run (Program (computer `setC` aDiv operand) nextIp instructions output)
-  Just (BST (Combo operand)) -> run (Program (computer `setB` (comboValue operand `mod` 8)) nextIp instructions output)
-  Just (OUT (Combo operand)) -> run (Program computer nextIp instructions (comboValue operand `mod` 8 : output))
-  Just (BXC _) -> run (Program (computer `setB` (b `xor` c)) nextIp instructions output)
-  Just (BXL (Literal operand)) -> run (Program (computer `setB` (b `xor` operand)) nextIp instructions output)
-  Just (JNZ (Literal operand))
-    | a == 0 -> run (program `setInstructionPointer` nextIp)
-    | otherwise -> run (program `setInstructionPointer` operand)
+  _ -> run (execute program)
   where
-    !(Program (!computer) (!ip) (!instructions) (!output)) = program
-    !(Computer (!a) (!b) (!c)) = computer
-    !nextIp = ip + 1
+    !(Program computer (!ip) (!instructions) output) = program
 
-    aDiv :: Int -> Int
-    aDiv operand = a `div` 2 ^ comboValue operand
-
-    comboValue :: Int -> Int
-    comboValue 0 = 0
-    comboValue 1 = 1
-    comboValue 2 = 2
-    comboValue 3 = 3
-    comboValue 4 = a
-    comboValue 5 = b
-    comboValue 6 = c
-    comboValue 7 = error "Reserved"
-
-outputsSelf :: Program -> Bool
-outputsSelf program = case (Vector.!?) instructions ip of
-  Nothing -> True
-  Just (ADV (Combo operand)) -> outputsSelf (Program (computer `setA` aDiv operand) nextIp instructions output)
-  Just (BDV (Combo operand)) -> outputsSelf (Program (computer `setB` aDiv operand) nextIp instructions output)
-  Just (CDV (Combo operand)) -> outputsSelf (Program (computer `setC` aDiv operand) nextIp instructions output)
-  Just (BST (Combo operand)) -> outputsSelf (Program (computer `setB` (comboValue operand `mod` 8)) nextIp instructions output)
-  Just (OUT (Combo operand)) -> outputsSelf (Program computer nextIp instructions (comboValue operand `mod` 8 : output))
-  Just (BXC _) -> outputsSelf (Program (computer `setB` (b `xor` c)) nextIp instructions output)
-  Just (BXL (Literal operand)) -> outputsSelf (Program (computer `setB` (b `xor` operand)) nextIp instructions output)
-  Just (JNZ (Literal operand))
-    | a == 0 -> outputsSelf (program `setInstructionPointer` nextIp)
-    | otherwise -> outputsSelf (program `setInstructionPointer` operand)
+buildUp :: Program -> Int -> Maybe Program
+buildUp program depth
+  | depth > length ints = Nothing
+  | otherwise =
+      find
+        (\p -> isJust (buildUp p (depth + 1)))
+        ( trace
+            (show depth ++ " filtered: \n" ++ foldr (\p s -> show (getA (getComputer p)) ++ " " ++ show (run p) ++ "\n" ++ s) "\n" programs)
+            allPrograms
+        )
   where
-    !(Program (!computer) (!ip) (!instructions) (!output)) = program
-    !(Computer (!a) (!b) (!c)) = computer
-    !nextIp = ip + 1
-
-    aDiv :: Int -> Int
-    aDiv operand = a `div` 2 ^ comboValue operand
-
-    comboValue :: Int -> Int
-    comboValue 0 = 0
-    comboValue 1 = 1
-    comboValue 2 = 2
-    comboValue 3 = 3
-    comboValue 4 = a
-    comboValue 5 = b
-    comboValue 6 = c
-    comboValue 7 = error "Reserved"
+    values = map (\i -> i * 8 ^ (depth - 1)) [0 .. 7]
+    as = map (\i -> i + getA computer) values
+    allPrograms = map (\a -> program `setComputer` (computer `setA` a)) as
+    programs =
+      filter
+        (\p -> getOutput (run p) == take depth ints)
+        ( trace
+            (show depth ++ " all: " ++ show (take depth ints) ++ "\n" ++ foldr (\p s -> show p ++ " " ++ show (run p) ++ "\n" ++ s) "\n" allPrograms)
+            allPrograms
+        )
+    Program computer ip instructions output = program
+    ints = instructionsToInts instructions
 
 part1 :: Program -> [Int]
 part1 = getOutput . run
 
-part2 :: Program -> Maybe Int
-part2 program = find (\a -> instructions == (getOutput . run) (program `setComputer` (getComputer program `setA` a))) [start .. end]
-  where
-    instructions = instructionsToInts (Vector.toList (getInstructions program))
-    (start, end) = range instructions
+-- part2 :: Program -> Maybe Int
+part2 program = buildUp (program `setComputer` (getComputer program `setA` 0)) 1
 
-    range :: [Int] -> (Int, Int)
-    range instructions =
-      let start = (8 ^ (length instructions - 1))
-       in (start, 8 * start - 1)
+-- trace
+--   (showOct start "" ++ " - " ++ showOct end "" ++ "\n" ++ foldr (\i s -> show i ++ s) "" instructions)
+--   (find (\a -> instructions == (getOutput . run) (program `setComputer` (getComputer program `setA` a))) [88782561745752 - 1_000_000_000 .. 88782561745752 + 1_000_000_000])
+-- where
+--   instructions = instructionsToInts (getInstructions program)
+--   (start, end) = range instructions
+
+--   range :: [Int] -> (Int, Int)
+--   range instructions =
+--     let start = (8 ^ (length instructions - 1))
+--      in (start, 8 * start - 1)
 
 main :: IO ()
 main = do
@@ -183,9 +190,9 @@ main = do
   -- print (part1 test) -- Expected: 4,6,3,5,6,3,5,2,1,0
   print (part1 input) -- Expected: 6,7,5,2,1,3,5,1,7
   --
-  -- putStrLn "\n----- Part 2 -----"
+  putStrLn "\n----- Part 2 -----"
   -- print (part2 test2) -- Expected: 117440
-  -- print (part2 input) -- Expected: ?
+  print (part2 input) -- Expected: ?
 
 processInput :: String -> Program
 processInput content = case parse parser "" content of
@@ -219,7 +226,7 @@ processInput content = case parse parser "" content of
       _ <- char ':'
       _ <- spaces
       instructions <- instructionsParser
-      return (Program computer 0 (Vector.fromList instructions) [])
+      return (Program computer 0 instructions [])
 
     instructionsParser :: Parser [Instruction]
     instructionsParser = do

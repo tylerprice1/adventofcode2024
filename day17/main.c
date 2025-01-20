@@ -120,7 +120,7 @@ long testRange(long args[THREAD_ARG_COUNT])
 
   for (i = start + 985000000000l; i <= end; i++)
   {
-    printf("thread %li: %Lf %% (%li / %li)\n", index, (double)100.0 * (((double)i - (double)start) / ((double)range)), i - start, range);
+    printf("thread %li: %f %% (%li / %li)\n", index, (double)100.0 * (((double)i - (double)start) / ((double)range)), i - start, range);
 
     for (j = i; j < i + 50000000000 - 1; j++)
     {
