@@ -4,9 +4,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define THREAD_COUNT 8
-#define THREAD_ARG_COUNT 3
-#define LENGTH 16
+#define THREAD_COUNT 1l
+#define THREAD_ARG_COUNT 3l
+#define LENGTH 16l
 
 struct Program
 {
@@ -15,97 +15,120 @@ struct Program
   long c;
 };
 
-const int instructions[LENGTH] = {2, 4, 1, 3, 7, 5, 1, 5, 0, 3, 4, 1, 5, 5, 3, 0};
+const long instructions[LENGTH] = {2l, 4l, 1l, 3l, 7l, 5l, 1l, 5l, 0l, 3l, 4l, 1l, 5l, 5l, 3l, 0l};
 struct Program program = {
   a : 21539243l,
   b : 0l,
   c : 0l,
 };
 
-bool outputsSelf(struct Program *program, long a)
+long outputsSelf(struct Program *program, long a)
 {
   long b = 0;
   long c = 0;
-  int instructionPointer = 0;
-  int i = 0;
-  int out;
-  int combo;
-  int instruction;
-  int operand;
+  long instructionPointer = 0;
+  long i = 0;
+  long out;
+  long combo;
+  long instruction;
+  long operand;
 
   while (instructionPointer < LENGTH)
   {
     instruction = instructions[instructionPointer];
-    operand = instructions[instructionPointer + 1];
+    operand = instructions[instructionPointer + 1l];
 
     switch (operand)
     {
-    case 0:
-    case 1:
-    case 2:
-    case 3:
+    case 0l:
+    case 1l:
+    case 2l:
+    case 3l:
       combo = operand;
-    case 4:
+      break;
+    case 4l:
       combo = a;
-    case 5:
+      break;
+    case 5l:
       combo = b;
-    case 6:
+      break;
+    case 6l:
       combo = c;
+      break;
     default:
-      combo = -1;
+      assert(false);
     }
 
     switch (instruction)
     {
-    case 0:
+    case 0l:
+    {
       a = a >> combo;
       break;
+    }
 
-    case 1:
+    case 1l:
+    {
       b = b ^ operand;
       break;
+    }
 
-    case 2:
+    case 2l:
+    {
       b = combo % 8;
       break;
+    }
 
-    case 3:
+    case 3l:
+    {
       if (a > 0)
       {
         instructionPointer = operand;
         continue;
       }
       break;
+    }
 
-    case 4:
+    case 4l:
+    {
       b = b ^ c;
       break;
+    }
 
-    case 5:
+    case 5l:
+    {
       out = combo % 8;
       if (out != instructions[i])
       {
-        return false;
+        return i;
       }
       i++;
       break;
+    }
 
-    case 6:
+    case 6l:
+    {
       b = a >> combo;
       break;
+    }
 
-    case 7:
+    case 7l:
+    {
       c = a >> combo;
       break;
+    }
 
     default:
-      return false;
+    {
+      assert(false);
+      return -1;
+    }
     }
 
     instructionPointer += 2;
   }
 
-  return true;
+  return i;
 }
 
 long testRange(long args[THREAD_ARG_COUNT])
@@ -116,22 +139,38 @@ long testRange(long args[THREAD_ARG_COUNT])
   const long range = end - start;
   long i, j;
 
+  long maxJ = -1, maxResult = -1;
+
   printf("Starting thread %li for range %li - %li\n", index + 1, start, end);
 
-  for (i = start + 985000000000l; i <= end; i++)
+  for (j = start; j <= end; j += (010000000000l))
   {
-    printf("thread %li: %f %% (%li / %li)\n", index, (double)100.0 * (((double)i - (double)start) / ((double)range)), i - start, range);
+    // printf("thread %li: %f %% (%li / %li)\n", index, (double)100.0 * (((double)i - (double)start) / ((double)range)), i - start, range);
 
-    for (j = i; j < i + 50000000000 - 1; j++)
+    // for (j = i; j < i + 50000000000 - 1; j++)
+    // {
+    long result = outputsSelf(&program, j);
+    // printf("%li -> %li\n", i, result);
+    if (result > maxResult)
     {
-      if (!outputsSelf(&program, j))
-      {
-        continue;
-      }
-
-      printf("----- FOUND A: %li -----\n", j);
-      return j;
+      maxJ = j;
+      maxResult = result;
+      fflush(stdout);
     }
+    printf("thread %li: 0o%lo -> %li (0d%li)\n", index + 1, maxJ, maxResult, maxJ);
+    // if (result > 0)
+    // {
+    //   printf("%lo -> %li\n", j, result);
+    // }
+
+    if (result != LENGTH)
+    {
+      continue;
+    }
+
+    printf("----- FOUND A: %li -----\n", j); // Answer: 216549846240877
+    return j;
+    // }
 
     i = j;
   }
@@ -142,9 +181,9 @@ long testRange(long args[THREAD_ARG_COUNT])
 int main()
 {
   pthread_t threads[THREAD_COUNT];
-  const long start = (long)pow(8.0, LENGTH - 1);
-  const long end = 8 * start - 1;
-  const long chunkSize = 1 + (end - start) / (long)THREAD_COUNT;
+  const long start = 06052247155l;     // 35184372088832l;
+  const long end = 07777777777777777l; // 8l * start - 1l;
+  const long chunkSize = 1l + (end - start) / THREAD_COUNT;
 
   long thread_args[THREAD_COUNT][THREAD_ARG_COUNT] = {{}, {}, {}};
   int result_code;
@@ -165,10 +204,8 @@ int main()
   for (int i = 0; i < THREAD_COUNT; i++)
   {
     result_code = pthread_join(threads[i], NULL);
-    printf("In main: Thread %d has ended.\n", i);
     assert(!result_code);
   }
 
-  printf("Main program has ended.\n");
   return 0;
 }

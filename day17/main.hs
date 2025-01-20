@@ -3,13 +3,13 @@ import Data.List (find)
 import Data.Maybe (fromMaybe, isJust)
 -- import Numeric (readOct, showIntAtBase, showOct)
 
--- import Debug.Trace (trace, traceShowId)
+import Debug.Trace (trace, traceShowId)
 import Numeric (showOct)
 import Safe (atMay)
 import Text.Parsec (char, digit, letter, many, many1, newline, optionMaybe, optional, parse, spaces, string)
 import Text.Parsec.String (Parser)
 
-trace a b = b
+-- trace a b = b
 
 padStart :: Int -> Char -> String -> String
 padStart len fill str =
@@ -161,19 +161,18 @@ part1 :: Program -> [Int]
 part1 = getOutput . run
 
 -- part2 :: Program -> Maybe Int
-part2 program = buildUp (program `setComputer` (getComputer program `setA` 0)) 1
+part2 program =
+  trace
+    (show start ++ " - " ++ show end)
+    (find (\a -> instructions == (getOutput . run) (program `setComputer` (getComputer program `setA` a))) [88782561745752 .. 88782561745752])
+  where
+    instructions = instructionsToInts (getInstructions program)
+    (start, end) = range instructions
 
--- trace
---   (showOct start "" ++ " - " ++ showOct end "" ++ "\n" ++ foldr (\i s -> show i ++ s) "" instructions)
---   (find (\a -> instructions == (getOutput . run) (program `setComputer` (getComputer program `setA` a))) [88782561745752 - 1_000_000_000 .. 88782561745752 + 1_000_000_000])
--- where
---   instructions = instructionsToInts (getInstructions program)
---   (start, end) = range instructions
-
---   range :: [Int] -> (Int, Int)
---   range instructions =
---     let start = (8 ^ (length instructions - 1))
---      in (start, 8 * start - 1)
+    range :: [Int] -> (Int, Int)
+    range instructions =
+      let start = (8 ^ (length instructions - 1))
+       in (start, 8 * start - 1)
 
 main :: IO ()
 main = do

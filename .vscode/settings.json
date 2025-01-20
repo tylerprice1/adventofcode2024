@@ -4,7 +4,8 @@
     "stdio.h": "c",
     "math.h": "c",
     "stdbool.h": "c",
-    "pthread.h": "c"
+    "pthread.h": "c",
+    "assert.h": "c"
   },
   "C_Cpp.dimInactiveRegions": true
 }

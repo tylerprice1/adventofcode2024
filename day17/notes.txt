@@ -18,6 +18,14 @@
 7. OUT (B % 8)
 8. if A == 0 then DONE else GOTO 1
 
+35184372088832 - 281474976710655
+range: 246290604621823
+
+Octal ending of 6052247155 gives a lot of matches
+
+00000000006052247155
+00000000010000000000
+
 "First digit of octal input maps to last element of array"
 "Reversed octal input maps to output array via"
 
