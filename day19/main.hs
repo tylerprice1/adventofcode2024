@@ -19,6 +19,9 @@ import Text.Parsec.String (Parser)
 traceWithId :: (Show a) => String -> a -> a
 traceWithId a b = trace (a ++ " " ++ show b) b
 
+traceWithFn :: (Show a) => (a -> String) -> a -> a
+traceWithFn fn a = trace (fn a) a
+
 data Tree
   = Node Char [Tree]
   | Leaf Char
@@ -48,17 +51,23 @@ insert s (Leaf _) = error "Cannot insert into leaf"
 insert s (Root nodes) = Root (insertNodes s nodes)
 insert s (Node nch nodes) = Node nch (insertNodes s nodes)
 
+nodeHasChar :: Tree -> Char -> Bool
+nodeHasChar (Root _) _ = False
+nodeHasChar (Leaf lch) ch = ch == lch
+nodeHasChar (Node nch _) ch = ch == nch
+
 insertNodes :: String -> [Tree] -> [Tree]
 insertNodes "" nodes = nodes
 insertNodes [ch] nodes =
   let leaf = Leaf ch
    in if leaf `elem` nodes
         then error ("duplicate " ++ show ch)
-        else sort (leaf : nodes)
+        else leaf : nodes
 insertNodes (ch : s) nodes = case breakOn (`nodeHasChar` ch) nodes of
-  Nothing -> insertNodes (ch : s) (sort (Node ch [] : nodes))
-  Just (leading, Node nch nodes', trailing) -> sort (leading ++ insert s (Node nch nodes') : trailing)
-  Just (leading, Leaf lch, trailing) -> sort (leading ++ Leaf lch : insert (ch : s) (Node ch []) : trailing)
+  Nothing -> insertNodes (ch : s) (Node ch [] : nodes)
+  Just (leading, node, trailing) -> case node of
+    Node nch nodes' -> leading ++ insert s (Node nch nodes') : trailing
+    Leaf lch -> leading ++ Leaf lch : insert (s) (Node ch []) : trailing
 
 showTrees :: [Tree] -> Int -> String
 showTrees nodes depth = foldr (\n s -> showTree n depth ++ s) "" nodes
@@ -73,31 +82,12 @@ treeToList (Leaf ch) = [[ch]]
 treeToList (Root nodes) = concatMap treeToList nodes
 treeToList (Node ch nodes) = map (ch :) (concatMap treeToList nodes)
 
-nodeHasChar :: Tree -> Char -> Bool
-nodeHasChar (Root _) _ = False
-nodeHasChar (Leaf lch) ch = ch == lch
-nodeHasChar (Node nch _) ch = ch == nch
-
-findMatches :: String -> Tree -> Maybe [(String, String)]
-findMatches "" tree = Nothing
-findMatches [ch] (Leaf lch) = if ch == lch then Just [([lch], "")] else Nothing
-findMatches (ch : s) (Leaf lch) = if ch == lch then Just [([lch], s)] else Nothing
-findMatches (ch : s) (Node nch nodes) =
-  if ch == nch
-    then case mapMaybe (findMatches s) nodes of
-      [] -> Nothing
-      matches -> Just (map (first (nch :)) (concat matches))
-    else Nothing
-findMatches s (Root nodes) = case concat (mapMaybe (findMatches s) nodes) of
-  [] -> Nothing
-  matches -> Just matches
-
 countCombinations :: String -> Tree -> Map.Map String Int -> (Int, Map.Map String Int)
 countCombinations "" tree cache = error "empty"
 countCombinations s tree cache = case Map.lookup s cache of
   Just m -> (m, cache)
   Nothing ->
-    case findMatches s tree of
+    case {- traceWithFn (\m -> s ++ "   " ++ show m) -} (findMatches s tree) of
       Nothing -> (0, Map.insert s 0 cache)
       Just matches ->
         let (count, cache') =
@@ -112,30 +102,20 @@ countCombinations s tree cache = case Map.lookup s cache of
                 (0, cache)
                 matches
          in (count, Map.insert s count cache')
-
-findCombinations :: String -> Tree -> Map.Map String (Maybe [[String]]) -> (Maybe [[String]], Map.Map String (Maybe [[String]]))
-findCombinations "" tree cache = error "empty"
-findCombinations s tree cache = case Map.lookup s cache of
-  Just m -> (m, cache)
-  Nothing ->
-    case findMatches s tree of
-      Nothing -> (Nothing, Map.insert s Nothing cache)
-      Just matches ->
-        let (combinations, cache') =
-              foldr
-                ( \(match, remaining) (combs, cache') ->
-                    if null remaining
-                      then ([match] : combs, cache')
-                      else case findCombinations remaining tree cache' of
-                        (Just combinations, cache'') ->
-                          (combs ++ map (match :) combinations, cache'')
-                        (_, cache'') -> (combs, cache')
-                )
-                ([], cache)
-                matches
-         in if null combinations
-              then (Nothing, Map.insert s Nothing cache')
-              else (Just combinations, Map.insert s (Just combinations) cache')
+  where
+    findMatches :: String -> Tree -> Maybe [(String, String)]
+    findMatches "" tree = Nothing
+    findMatches [ch] (Leaf lch) = if ch == lch then Just [([lch], "")] else Nothing
+    findMatches (ch : s) (Leaf lch) = if ch == lch then Just [([lch], s)] else Nothing
+    findMatches (ch : s) (Node nch nodes) =
+      if ch == nch
+        then case mapMaybe (findMatches s) nodes of
+          [] -> Nothing
+          matches -> Just (map (first (nch :)) (concat matches))
+        else Nothing
+    findMatches s (Root nodes) = case concat (mapMaybe (findMatches s) nodes) of
+      [] -> Nothing
+      matches -> Just matches
 
 part1 :: ([String], [String]) -> Int
 part1 (towels, designs) = length (filter (\d -> 0 /= fst (countCombinations d tree Map.empty)) designs)
@@ -144,10 +124,9 @@ part1 (towels, designs) = length (filter (\d -> 0 /= fst (countCombinations d tr
     tree = foldr insert (Root []) towels
 
 part2 :: ([String], [String]) -> Int
-part2 (towels, designs) =
-  sum (trace (show (length (filter (/= 0) counts))) counts)
+part2 (towels, designs) = sum counts
   where
-    counts = map (\d -> traceWithId d (fst (countCombinations d tree Map.empty))) designs
+    counts = map (\d -> traceWithFn (\c -> show c ++ "    " ++ d) (fst (countCombinations d tree Map.empty))) designs
 
     tree :: Tree
     tree = traceShowId (foldr insert (Root []) towels)
@@ -156,14 +135,18 @@ main = do
   testFile <- readFile "./test.txt"
   let test = processInput testFile
 
+  test2File <- readFile "./test2.txt"
+  let test2 = processInput test2File
+
   inputFile <- readFile "./input.txt"
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  print (part1 test) -- Expected: 6
-  print (part1 input) -- Expected: 258
+  -- print (part1 test) -- Expected: 6
+  -- print (part1 input) -- Expected: 258
   putStrLn "\n----- Part 2 -----"
   print (part2 test) -- Expected: 16
+  print (part2 test2) -- Expected: 2
   print (part2 input) -- Expected: ?
 
 processInput :: String -> ([String], [String])
