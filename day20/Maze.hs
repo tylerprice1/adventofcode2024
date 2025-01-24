@@ -1,4 +1,4 @@
-module Maze (Maze (..)) where
+module Maze (Maze (..), showMazeWithPath) where
 
 import Data.Set qualified as Set
 import Utils (Position)
@@ -35,3 +35,28 @@ instance Show Maze where
       )
       ""
       [0 .. height - 1]
+
+showMazeWithPath (Maze width height start end walls) path =
+  let pathSet = Set.fromList path
+   in foldr
+        ( \y s ->
+            foldr
+              ( \x s ->
+                  ( let p = (x, y)
+                        ch
+                          | p == start = 'S'
+                          | p == end = 'E'
+                          | p `Set.member` pathSet = 'O'
+                          | p `Set.member` walls = '#'
+                          | otherwise = '.'
+                     in ch
+                  )
+                    : s
+              )
+              ""
+              [0 .. width - 1]
+              ++ "\n"
+              ++ s
+        )
+        ""
+        [0 .. height - 1]
