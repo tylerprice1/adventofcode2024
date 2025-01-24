@@ -1,33 +1,39 @@
 module Main (main) where
 
-import Control.Parallel.Strategies (parList, parListChunk, parMap, rdeepseq, rpar, using)
-import Data.Set qualified as Set
+import Control.Parallel.Strategies (parBuffer, parList, parListChunk, parMap, rdeepseq, rpar, using)
 -- import Debug.Trace (trace, traceShow, traceShowId)
 
-import Debug.Trace (traceShowId)
+import Data.List (group, sort)
+import Data.List.Split (chunksOf)
+import Data.Set qualified as Set
+import Debug.Trace (trace, traceShow, traceShowId)
 import Dijkstra (dijkstra)
-import Maze (Maze (..), showMazeWithPath)
+import Maze (Maze (..), getNonWalls, showMazeWithPath)
 import Utils (Position)
 
 -- | 3-tuple of Position representing (start, wall, end)
 type Cheat = (Int, [Position])
 
 part1 :: (Maze, [Cheat]) -> Int
-part1 (!maze, !cheats) =
-  let (Maze !width !height !start !end !walls) = maze
-      !cheatless = fst (dijkstra maze)
-      !cheated =
-        parMap
-          rdeepseq
-          ( \(_, !cheatWalls) ->
-              let !cheatMaze = Maze width height start end (walls `Set.difference` Set.fromList cheatWalls)
-                  (!distance, !path) = dijkstra cheatMaze
-                  !pathSet = Set.fromList path
-               in if any (`Set.notMember` pathSet) cheatWalls then cheatless else distance
+part1 (maze, cheats) =
+  let (Maze width height start end walls) = maze
+      cheatless = fst (dijkstra maze)
+      cheated =
+        map
+          ( \(_, cheatWalls) ->
+              let cheatMaze = Maze width height start end (walls `Set.difference` Set.fromList cheatWalls)
+                  (distance, path) = dijkstra cheatMaze
+                  pathSet = Set.fromList path
+               in if (cheatless - distance > 50)
+                    then
+                      trace (show distance ++ " " ++ show path ++ "\n" ++ show cheatMaze ++ "\n" ++ showMazeWithPath cheatMaze path) (if any (`Set.notMember` pathSet) cheatWalls then cheatless else distance)
+                    else
+                      (if any (`Set.notMember` pathSet) cheatWalls then cheatless else distance)
           )
           cheats
-      !saved = map (cheatless -) cheated `using` parList rdeepseq
-   in length (filter (>= 100) saved)
+          `using` parBuffer 6 rdeepseq
+      saved = map (cheatless -) cheated
+   in traceShow (map (\s -> (length s, head s)) (group (reverse (sort (filter (> 0) saved))))) (length (filter (>= 50) saved))
 
 part2 :: (Maze, [Cheat]) -> Int
 part2 input = 0
@@ -35,7 +41,7 @@ part2 input = 0
 main :: IO ()
 main = do
   testFile <- readFile "./test.txt"
-  let !test = processInput testFile
+  let test = processInput testFile
 
   inputFile <- readFile "./input.txt"
   let input = processInput inputFile
@@ -53,7 +59,7 @@ processInput contents = (maze, cheats)
     lns = lines contents
     height = length lns
     width = length (head lns)
-    !maze =
+    maze =
       foldr
         ( \(line, y) acc ->
             foldr
@@ -75,46 +81,31 @@ processInput contents = (maze, cheats)
     (Maze _ _ _ _ walls) = maze
 
     cheats :: [Cheat]
-    !cheats = filter ((<= 20) . fst) (parMap rpar (traceShowId . dijkstra) cheatMazes)
+    cheats = filter ((<= 2) . fst) (map dijkstra cheatMazes `using` parBuffer 6 rdeepseq)
       where
-        !cheatMazes = map (\(p1, p2) -> Maze width height p1 p2 borders) pairs
+        cheatMazes = map (\(p1, p2) -> Maze width height p1 p2 borders) pairs
           where
-            !xs = [0 .. width - 1]
-            !ys = [0 .. height - 1]
+            xs = [0 .. width - 1]
+            ys = [0 .. height - 1]
+            nonWalls = getNonWalls maze
 
-            !borders =
+            borders =
               Set.fromList
                 ( foldr (\x borders -> (x, 0) : (x, height - 1) : borders) [] xs
                     ++ foldr (\y borders -> (0, y) : (width - 1, y) : borders) [] ys
                 )
 
-            !pairs =
+            pairs =
               foldr
                 ( \p1 pairs ->
                     foldr
                       ( \p2 pairs ->
-                          if p1 == p2
-                            then pairs
-                            else (p1, p2) : pairs
+                          if p1 /= p2
+                            then (p1, p2) : pairs
+                            else pairs
                       )
                       pairs
                       nonWalls
                 )
                 []
                 nonWalls
-
-            !nonWalls =
-              foldr
-                ( \x ps ->
-                    foldr
-                      ( \y ps ->
-                          let !p = (x, y)
-                           in if p `Set.member` walls
-                                then ps
-                                else p : ps
-                      )
-                      ps
-                      ys
-                )
-                []
-                xs
