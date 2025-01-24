@@ -104,7 +104,7 @@ updatePosition prevPosition !position score queue !visited scoreMap previousMap
   | position `Set.member` visited = (queue, scoreMap, previousMap)
   | otherwise =
       case Map.lookup position scoreMap of
-        Nothing -> (queue, scoreMap, previousMap) -- wall
+        Nothing -> error "No score map" -- (queue, scoreMap, previousMap) -- wall
         Just !oldScore ->
           -- if alt < dist[v]:
           if score < oldScore
