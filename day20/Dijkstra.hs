@@ -53,20 +53,19 @@ dijkstra maze maxDistance =
           nonWalls
 
       visited = walls
-      (distanceMap', previousMap') = dijkstra' queue visited distanceMap previousMap
-      score = (Map.!) distanceMap' end
+      (distanceMap', previousMap') = dijkstra' queue end visited distanceMap previousMap maxDistance
+      score = Map.findWithDefault maxInt end distanceMap'
    in if score <= maxDistance then (score, getPath end previousMap') else (maxInt, [])
 
-dijkstra' :: PriorityQueue -> Visited -> ScoreMap -> PreviousMap -> (ScoreMap, PreviousMap)
-dijkstra' queue visited distanceMap previousMap = case Heap.view queue of
+dijkstra' :: PriorityQueue -> Position -> Visited -> ScoreMap -> PreviousMap -> Distance -> (ScoreMap, PreviousMap)
+dijkstra' queue end visited distanceMap previousMap maxDistance = case Heap.view queue of
   -- while Q is not empty:
   Nothing -> (distanceMap, previousMap)
   -- u ← vertex in Q with minimum dist[u]
   -- remove u from Q
   Just ((distance, position), unvisited) ->
-    if distance == maxInt
-      then (distanceMap, previousMap)
-      else
+    if distance <= maxDistance && position /= end
+      then
         let newDistance = distance + 1
             -- for each neighbor v of u still in Q:
             newPositions = filter (`Set.notMember` visited) [north position, east position, south position, west position]
@@ -79,7 +78,9 @@ dijkstra' queue visited distanceMap previousMap = case Heap.view queue of
                 )
                 (unvisited, distanceMap, previousMap)
                 newPositions
-         in dijkstra' unvisited' (position `Set.insert` visited) distanceMap' previousMap'
+         in dijkstra' unvisited' end (position `Set.insert` visited) distanceMap' previousMap' maxDistance
+      else
+        (distanceMap, previousMap)
 
 {-# INLINE updatePosition #-}
 updatePosition :: Position -> Position -> Distance -> PriorityQueue -> ScoreMap -> PreviousMap -> (PriorityQueue, ScoreMap, PreviousMap)

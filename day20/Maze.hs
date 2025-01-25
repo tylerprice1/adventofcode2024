@@ -62,6 +62,7 @@ instance Show Maze where
       ""
       [0 .. height - 1]
 
+{-# INLINEABLE getBorders #-}
 getBorders :: Maze -> [Position]
 getBorders (Maze width height _ _ _ _) =
   let xs = [0 .. width - 1]
@@ -70,9 +71,11 @@ getBorders (Maze width height _ _ _ _) =
           ++ foldr (\y borders -> (0, y) : (width - 1, y) : borders) [] ys
       )
 
+{-# INLINEABLE getNonBorders #-}
 getNonBorders :: Maze -> [Position]
 getNonBorders maze = Set.toList (Set.difference (Set.fromList (getPositions maze)) (Set.fromList (getBorders maze)))
 
+{-# INLINEABLE getPositions #-}
 getPositions :: Maze -> [Position]
 getPositions (Maze width height _ _ _ _) =
   let xs = [0 .. width - 1]

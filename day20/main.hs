@@ -1,7 +1,12 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Redundant bracket" #-}
 module Main (main) where
 
-import Control.Parallel.Strategies (parBuffer, rdeepseq, using)
-import Data.List (sort)
+import Control.DeepSeq (deepseq)
+import Control.Parallel.Strategies (parBuffer, parListChunk, rdeepseq, using)
+import Data.List (group, sort)
+import Data.List.Split (chunksOf)
 import Data.Maybe (catMaybes)
 import Data.Set qualified as Set
 import Debug.Trace (trace, traceShow, traceShowId)
@@ -14,7 +19,7 @@ import Utils (Position)
 type Cheat = (Position, Position)
 
 race :: Maze -> Maze -> Cheat -> Int -> Maybe Distance
-{-# INLINE race #-}
+{-# INLINEABLE race #-}
 race (Maze width height start end walls nonWalls) (Maze _ _ _ _ cheatWalls cheatNonWalls) (cheatStart, cheatEnd) maxCheatDuration =
   let (!toCheatEnd, _) = dijkstra (Maze width height cheatStart cheatEnd cheatWalls cheatNonWalls) maxCheatDuration -- no walls
    in if toCheatEnd <= maxCheatDuration
@@ -32,13 +37,24 @@ part1 (maze, cheatless, cheats) =
       nonBorders = Set.fromList (getNonBorders maze)
       cheatMaze = Maze width height start end borders nonBorders
 
-      cheated = filter (< cheatless) (catMaybes (map (\c -> race maze cheatMaze c 2) cheats `using` parBuffer 7 rdeepseq))
+      possibleCheats = filter (\((x1, y1), (x2, y2)) -> abs (x2 - x1) <= 2 && abs (y2 - y1) <= 2) cheats
+      cheated = concatMap catMaybes (map (map (\c -> race maze cheatMaze c 2)) (chunksOf 10000 possibleCheats) `using` parBuffer 7 rdeepseq)
 
       saved = map (cheatless -) cheated
-   in length (filter (>= 100) (traceShow (sort cheated, sort saved) saved))
+   in length (filter (>= 100) saved)
 
-part2 :: (Maze, [Cheat]) -> Int
-part2 input = 0
+part2 :: (Maze, Distance, [Cheat]) -> Int
+part2 (maze, cheatless, cheats) =
+  let (Maze width height start end walls _) = maze
+      borders = Set.fromList (getBorders maze)
+      nonBorders = Set.fromList (getNonBorders maze)
+      cheatMaze = Maze width height start end borders nonBorders
+
+      possibleCheats = filter (\((x1, y1), (x2, y2)) -> abs (x2 - x1) <= 20 && abs (y2 - y1) <= 20) cheats
+      cheated = concatMap (filter (> 0) . catMaybes) (map (map (\c -> race maze cheatMaze c 20)) (chunksOf 100000 possibleCheats) `using` parBuffer 7 rdeepseq)
+
+      saved = map (cheatless -) (cheated)
+   in length ((filter (>= 100) saved))
 
 main :: IO ()
 main = do
@@ -50,15 +66,16 @@ main = do
 
   putStrLn "\n----- Part 1 -----"
   -- print (part1 test) -- Expected: ?
-  print (part1 input) -- Expected: ?
+  -- print (part1 input) -- Expected: ?
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
-  -- print (part2 input) -- Expected: ?
+  print (part2 input) -- Expected: ?
 
 processInput :: String -> (Maze, Int, [Cheat])
-processInput contents = (maze, traceShow (cheatlessDistance, cheatlessDistance ^ 2) cheatlessDistance, cheats)
+processInput contents = (maze, cheatlessDistance, cheats)
   where
     maze = readMaze contents
-    (cheatlessDistance, cheatlessPath) = dijkstra maze maxInt
+    !nonWalls = getNonWalls maze
+    (!cheatlessDistance, _) = traceShow (length nonWalls, (length nonWalls) ^ 2) (dijkstra maze maxInt)
 
-    cheats = foldl (\acc p1 -> foldl (\pairs p2 -> (p1, p2) : pairs) acc cheatlessPath) [] cheatlessPath
+    cheats = foldl (\acc p1 -> foldl (\pairs p2 -> (p1, p2) : pairs) acc nonWalls) [] nonWalls
