@@ -4,7 +4,6 @@ import Data.Heap qualified as Heap
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import GHC.Base (maxInt)
-import GHC.List (foldl', foldr')
 import Maze (Maze (..), Walls, getNonWalls, getPositions)
 import Utils (Position, east, north, south, west)
 
@@ -29,7 +28,6 @@ getPath position previousMap = case Map.lookup position previousMap of
   Nothing -> []
   Just prev -> position : getPath prev previousMap
 
-{-# INLINEABLE dijkstra #-}
 dijkstra :: Maze -> (Int, [Position])
 dijkstra maze =
   let Maze _ _ start end walls = maze
@@ -46,8 +44,8 @@ dijkstra maze =
 
       queue :: PriorityQueue
       queue =
-        foldl'
-          ( \queue p ->
+        foldr
+          ( \p queue ->
               -- 2. Assign to every node a distance from start value: for the starting node, it is zero, and for all other nodes, it is infinity, since initially no path is known to these nodes.
               --    During execution, the distance of a node N is the length of the shortest path discovered so far between the starting node and N.[18]
               let score = if p /= start then maxInt else 0
@@ -78,21 +76,21 @@ dijkstra' queue visited scoreMap previousMap = case Heap.view queue of
 
             -- alt ← dist[u] + Graph.Edges(u, v)
             (unvisited', scoreMap', previousMap') =
-              foldl
-                ( \(unvisited, scoreMap, previousMap) newPosition ->
+              foldr
+                ( \newPosition (unvisited, scoreMap, previousMap) ->
                     updatePosition position newPosition newScore unvisited scoreMap previousMap
                 )
                 (unvisited, scoreMap, previousMap)
                 newPositions
          in dijkstra' unvisited' (position `Set.insert` visited) scoreMap' previousMap'
 
-{-# INLINE updatePosition #-}
 updatePosition :: Position -> Position -> Score -> PriorityQueue -> ScoreMap -> PreviousMap -> (PriorityQueue, ScoreMap, PreviousMap)
 updatePosition prevPosition position score queue scoreMap previousMap =
-  if score < Map.findWithDefault maxInt position scoreMap
-    then
-      -- dist[v] ← alt
-      -- prev[v] ← u
-      (Heap.insert (score, position) queue, Map.insert position score scoreMap, Map.insert position prevPosition previousMap)
-    else
-      (queue, scoreMap, previousMap)
+  let oldScore = Map.findWithDefault maxInt position scoreMap
+   in case compare score oldScore of
+        -- if alt < dist[v]:
+        -- dist[v] ← alt
+        -- prev[v] ← u
+        LT -> (Heap.insert (score, position) queue, Map.insert position score scoreMap, Map.insert position prevPosition previousMap)
+        EQ -> (queue, scoreMap, previousMap)
+        GT -> (queue, scoreMap, previousMap)
