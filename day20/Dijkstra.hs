@@ -4,7 +4,7 @@ import Data.Heap qualified as Heap
 import Data.Map qualified as Map
 import Data.Set qualified as Set
 import GHC.Base (maxInt)
-import Maze (Maze (..), Walls, getNonWalls, getPositions)
+import Maze (Maze (..), getNonWalls, getPositions)
 import Utils (Position, east, north, south, west)
 
 type Distance = Int
@@ -29,18 +29,15 @@ getPath position previousMap = case Map.lookup position previousMap of
   Just prev -> position : getPath prev previousMap
 
 {-# INLINEABLE dijkstra #-}
-dijkstra :: Maze -> (Distance, [Position])
-dijkstra maze =
-  let Maze _ _ start end walls = maze
+dijkstra :: Maze -> Distance -> (Distance, [Position])
+dijkstra maze maxDistance =
+  let Maze _ _ start end walls nonWalls = maze
       -- for each vertex v in Graph.Vertices:
       -- dist[v] ← INFINITY
       -- prev[v] ← UNDEFINED
       -- add v to Q
       -- dist[source] ← 0
-      scoreMap :: ScoreMap
-      scoreMap = Map.singleton start 0
-
-      previousMap :: PreviousMap
+      distanceMap = Map.singleton start 0
       previousMap = Map.empty
 
       queue :: PriorityQueue
@@ -53,36 +50,36 @@ dijkstra maze =
                in Heap.insert (score, p) queue
           )
           Heap.empty
-          (getNonWalls maze)
+          nonWalls
 
       visited = walls
-      (scoreMap', previousMap') = dijkstra' queue visited scoreMap previousMap
-      score = (Map.!) scoreMap' end
-   in if score <= maxInt then (score, getPath end previousMap') else (maxInt, [])
+      (distanceMap', previousMap') = dijkstra' queue visited distanceMap previousMap
+      score = (Map.!) distanceMap' end
+   in if score <= maxDistance then (score, getPath end previousMap') else (maxInt, [])
 
 dijkstra' :: PriorityQueue -> Visited -> ScoreMap -> PreviousMap -> (ScoreMap, PreviousMap)
-dijkstra' queue visited scoreMap previousMap = case Heap.view queue of
+dijkstra' queue visited distanceMap previousMap = case Heap.view queue of
   -- while Q is not empty:
-  Nothing -> (scoreMap, previousMap)
+  Nothing -> (distanceMap, previousMap)
   -- u ← vertex in Q with minimum dist[u]
   -- remove u from Q
-  Just ((score, position), unvisited) ->
-    if score == maxInt
-      then (scoreMap, previousMap)
+  Just ((distance, position), unvisited) ->
+    if distance == maxInt
+      then (distanceMap, previousMap)
       else
-        let newScore = score + 1
+        let newDistance = distance + 1
             -- for each neighbor v of u still in Q:
             newPositions = filter (`Set.notMember` visited) [north position, east position, south position, west position]
 
             -- alt ← dist[u] + Graph.Edges(u, v)
-            (unvisited', scoreMap', previousMap') =
+            (unvisited', distanceMap', previousMap') =
               foldr
-                ( \newPosition (unvisited, scoreMap, previousMap) ->
-                    updatePosition position newPosition newScore unvisited scoreMap previousMap
+                ( \newPosition (unvisited, distanceMap, previousMap) ->
+                    updatePosition position newPosition newDistance unvisited distanceMap previousMap
                 )
-                (unvisited, scoreMap, previousMap)
+                (unvisited, distanceMap, previousMap)
                 newPositions
-         in dijkstra' unvisited' (position `Set.insert` visited) scoreMap' previousMap'
+         in dijkstra' unvisited' (position `Set.insert` visited) distanceMap' previousMap'
 
 {-# INLINE updatePosition #-}
 updatePosition :: Position -> Position -> Distance -> PriorityQueue -> ScoreMap -> PreviousMap -> (PriorityQueue, ScoreMap, PreviousMap)
