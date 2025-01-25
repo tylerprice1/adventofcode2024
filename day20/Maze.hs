@@ -1,13 +1,14 @@
 module Maze (Maze (..), getBorders, getNonWalls, getPositions, showMazeWithPath, Walls) where
 
+import Data.Int (Int16)
 import Data.Set qualified as Set
 import Utils (Position)
 
 type Walls = Set.Set Position
 
 data Maze = Maze
-  { getWidth :: Int,
-    getHeight :: Int,
+  { getWidth :: Int16,
+    getHeight :: Int16,
     getStart :: Position,
     getEnd :: Position,
     getWalls :: Walls
@@ -47,14 +48,14 @@ getBorders (Maze width height _ _ _) =
       )
 
 getNonWalls :: Maze -> [Position]
-getNonWalls !maze =
+getNonWalls maze =
   let walls = getWalls maze
    in filter (`Set.notMember` walls) (getPositions maze)
 
 getPositions :: Maze -> [Position]
 getPositions (Maze width height _ _ _) =
-  let !xs = [0 .. width - 1]
-      !ys = [0 .. height - 1]
+  let xs = [0 .. width - 1]
+      ys = [0 .. height - 1]
    in foldr (\y ps -> foldr (\x ps -> (x, y) : ps) ps xs) [] ys
 
 showMazeWithPath :: Maze -> [Position] -> String

@@ -1,4 +1,4 @@
-module Dijkstra (dijkstra) where
+module Dijkstra (dijkstra, Distance) where
 
 import Data.Heap qualified as Heap
 import Data.Map qualified as Map
@@ -7,13 +7,13 @@ import GHC.Base (maxInt)
 import Maze (Maze (..), Walls, getNonWalls, getPositions)
 import Utils (Position, east, north, south, west)
 
-type PriorityQueue = Heap.MinPrioHeap Int Position
+type Distance = Int
+
+type PriorityQueue = Heap.MinPrioHeap Distance Position
 
 type Visited = Set.Set Position
 
-type Score = Int
-
-type ScoreMap = Map.Map Position Score
+type ScoreMap = Map.Map Position Distance
 
 type PreviousMap = Map.Map Position Position
 
@@ -28,7 +28,8 @@ getPath position previousMap = case Map.lookup position previousMap of
   Nothing -> []
   Just prev -> position : getPath prev previousMap
 
-dijkstra :: Maze -> (Int, [Position])
+{-# INLINEABLE dijkstra #-}
+dijkstra :: Maze -> (Distance, [Position])
 dijkstra maze =
   let Maze _ _ start end walls = maze
       -- for each vertex v in Graph.Vertices:
@@ -57,8 +58,7 @@ dijkstra maze =
       visited = walls
       (scoreMap', previousMap') = dijkstra' queue visited scoreMap previousMap
       score = (Map.!) scoreMap' end
-      path = getPath end previousMap'
-   in if score <= maxInt then (score, path) else (maxInt, [])
+   in if score <= maxInt then (score, getPath end previousMap') else (maxInt, [])
 
 dijkstra' :: PriorityQueue -> Visited -> ScoreMap -> PreviousMap -> (ScoreMap, PreviousMap)
 dijkstra' queue visited scoreMap previousMap = case Heap.view queue of
@@ -84,13 +84,13 @@ dijkstra' queue visited scoreMap previousMap = case Heap.view queue of
                 newPositions
          in dijkstra' unvisited' (position `Set.insert` visited) scoreMap' previousMap'
 
-updatePosition :: Position -> Position -> Score -> PriorityQueue -> ScoreMap -> PreviousMap -> (PriorityQueue, ScoreMap, PreviousMap)
+{-# INLINE updatePosition #-}
+updatePosition :: Position -> Position -> Distance -> PriorityQueue -> ScoreMap -> PreviousMap -> (PriorityQueue, ScoreMap, PreviousMap)
 updatePosition prevPosition position score queue scoreMap previousMap =
-  let oldScore = Map.findWithDefault maxInt position scoreMap
-   in case compare score oldScore of
-        -- if alt < dist[v]:
-        -- dist[v] ← alt
-        -- prev[v] ← u
-        LT -> (Heap.insert (score, position) queue, Map.insert position score scoreMap, Map.insert position prevPosition previousMap)
-        EQ -> (queue, scoreMap, previousMap)
-        GT -> (queue, scoreMap, previousMap)
+  if score < Map.findWithDefault maxInt position scoreMap
+    then
+      -- dist[v] ← alt
+      -- prev[v] ← u
+      (Heap.insert (score, position) queue, Map.insert position score scoreMap, Map.insert position prevPosition previousMap)
+    else
+      (queue, scoreMap, previousMap)

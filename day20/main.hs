@@ -1,39 +1,36 @@
 module Main (main) where
 
-import Control.Parallel.Strategies (parBuffer, parList, parListChunk, parMap, rdeepseq, rpar, using)
--- import Debug.Trace (trace, traceShow, traceShowId)
-
-import Data.List (group, sort)
-import Data.List.Split (chunksOf)
-import Data.Maybe (catMaybes, mapMaybe)
+import Control.Parallel.Strategies (parBuffer, rdeepseq, using)
+import Data.Maybe (catMaybes)
 import Data.Set qualified as Set
 import Debug.Trace (trace, traceShow, traceShowId)
-import Dijkstra (dijkstra)
+import Dijkstra (Distance, dijkstra)
 import Maze (Maze (..), getBorders, getNonWalls, showMazeWithPath)
-import Text.Show.Pretty (ppShow, valToStr)
 import Utils (Position)
 
--- | 3-tuple of Position representing (start, wall, end)
+-- | 2-tuple of Position representing (start, end)
 type Cheat = (Position, Position)
 
-race :: Maze -> Set.Set Position -> Cheat -> Int -> Maybe Int
-race (Maze width height start end walls) borders (cheatStart, cheatEnd) maxDuration =
-  let (toCheatStart, _) = dijkstra (Maze width height start cheatStart walls)
-      (toCheatEnd, _) = dijkstra (Maze width height cheatStart cheatEnd borders) -- no walls!
-      (toEnd, _) = dijkstra (Maze width height cheatEnd end walls)
-   in if toCheatEnd <= maxDuration
+race :: Maze -> Set.Set Position -> Cheat -> Int -> Maybe Distance
+{-# INLINE race #-}
+race (Maze width height start end walls) borders (cheatStart, cheatEnd) maxCheatDuration =
+  let (!toCheatEnd, _) = dijkstra (Maze width height cheatStart cheatEnd borders) -- no walls
+   in if toCheatEnd <= maxCheatDuration
         then
-          Just (toCheatStart + toCheatEnd + toEnd)
+          let (!toCheatStart, _) = dijkstra (Maze width height start cheatStart walls)
+              (!toEnd, _) = dijkstra (Maze width height cheatEnd end walls)
+           in Just (toCheatStart + toCheatEnd + toEnd)
         else
           Nothing
 
 part1 :: (Maze, [Cheat]) -> Int
-part1 (!maze, !cheats) =
-  let (Maze width height start end walls) = maze
-      borders = Set.fromList (getBorders maze)
-      cheatless = fst (dijkstra maze)
-      cheated = catMaybes (map (\c -> race maze borders c 2) cheats `using` parBuffer 6 rdeepseq)
-      saved = parMap rdeepseq (cheatless -) cheated
+part1 (maze, cheats) =
+  let (Maze width height start end walls) = trace "Maze" maze
+      borders = trace "Borders" Set.fromList (getBorders maze)
+      cheated = trace "Cheated" catMaybes (map (\c -> race maze borders c 2) cheats `using` parBuffer 7 rdeepseq)
+
+      cheatless = trace "Cheatless" fst (dijkstra maze)
+      saved = trace "Saved" map (cheatless -) cheated
    in length (filter (>= 100) saved)
 
 part2 :: (Maze, [Cheat]) -> Int
@@ -45,10 +42,10 @@ main = do
   let test = processInput testFile
 
   inputFile <- readFile "./input.txt"
-  let input = processInput inputFile
+  let !input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  print (part1 test) -- Expected: ?
+  -- print (part1 test) -- Expected: ?
   print (part1 input) -- Expected: ?
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
@@ -58,8 +55,8 @@ processInput :: String -> (Maze, [Cheat])
 processInput contents = (maze, cheats)
   where
     lns = lines contents
-    height = length lns
-    width = length (head lns)
+    height = fromIntegral (length lns)
+    width = fromIntegral (length (head lns))
     maze =
       foldr
         ( \(line, y) acc ->
@@ -80,6 +77,6 @@ processInput contents = (maze, cheats)
         (zip lns [0 ..])
 
     cheats :: [Cheat]
-    cheats = foldr (\p1 acc -> foldr (\p2 pairs -> (p1, p2) : pairs) acc nonWalls) [] nonWalls
+    cheats = foldl (\acc p1 -> foldl (\pairs p2 -> (p1, p2) : pairs) acc nonWalls) [] nonWalls
       where
         nonWalls = getNonWalls maze
