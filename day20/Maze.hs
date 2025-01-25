@@ -1,4 +1,4 @@
-module Maze (Maze (..), getNonWalls, getPositions, showMazeWithPath, Walls) where
+module Maze (Maze (..), getBorders, getNonWalls, getPositions, showMazeWithPath, Walls) where
 
 import Data.Set qualified as Set
 import Utils (Position)
@@ -37,6 +37,14 @@ instance Show Maze where
       )
       ""
       [0 .. height - 1]
+
+getBorders :: Maze -> [Position]
+getBorders (Maze width height _ _ _) =
+  let xs = [0 .. width - 1]
+      ys = [0 .. height - 1]
+   in ( foldr (\x borders -> (x, 0) : (x, height - 1) : borders) [] xs
+          ++ foldr (\y borders -> (0, y) : (width - 1, y) : borders) [] ys
+      )
 
 getNonWalls :: Maze -> [Position]
 getNonWalls !maze =
