@@ -1,11 +1,22 @@
 {
-  "cSpell.words": ["INLINEABLE"],
-  "files.associations": {
-    "stdio.h": "c",
-    "math.h": "c",
-    "stdbool.h": "c",
-    "pthread.h": "c",
-    "assert.h": "c"
-  },
-  "C_Cpp.dimInactiveRegions": true
+  "cSpell.words": [
+    "cheatless",
+    "INLINEABLE",
+    "Eithers",
+    "foldl",
+    "foldr",
+    "HLINT",
+    "imap",
+    "ints",
+    "Prio",
+    "pseq",
+    "rdeepseq",
+    "rref",
+    "signum",
+    "snoc",
+    "uncons",
+    "uncurry",
+    "unrecognised",
+    "unsnoc"
+  ]
 }
