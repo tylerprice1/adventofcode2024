@@ -2,8 +2,7 @@ part1 input = input
 
 part2 input = input
 
-processInput contents = contents
-
+main :: IO ()
 main = do
   testFile <- readFile "./test.txt"
   let test = processInput testFile
@@ -17,3 +16,5 @@ main = do
   putStrLn "\n----- Part 2 -----"
   print (part2 test) -- Expected: ?
   print (part2 input) -- Expected: ?
+
+processInput contents = contents

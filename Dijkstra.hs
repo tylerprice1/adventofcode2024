@@ -1,23 +1,32 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Dijkstra (Graph (..), Node (..), dijkstra) where
+module Dijkstra (Graph (..), Node (..), dijkstra, findNode) where
 
 import Data.Heap qualified as Heap
+import Data.List (find)
 import Data.Map qualified as Map
 import Data.Set qualified as Set
+import Debug.Trace (trace)
 import GHC.Base (maxInt)
 
 data Node v d = Node {getValue :: v, getEdges :: [(d, Node v d)]}
 
-instance (Eq v, Eq d) => Eq (Node v d) where
-  (==) (Node aValue aEdges) (Node bValue bEdges) = aValue == bValue && aEdges == bEdges
+instance (Eq v) => Eq (Node v d) where
+  (==) (Node aValue _) (Node bValue _) = aValue == bValue
 
-instance (Ord v, Ord d) => Ord (Node v d) where
-  compare (Node aValue aEdges) (Node bValue bEdges) = case compare aValue bValue of
-    EQ -> compare aEdges bEdges
-    other -> other
+instance (Ord v) => Ord (Node v d) where
+  compare (Node aValue _) (Node bValue _) = compare aValue bValue
+
+instance (Show v, Show d) => Show (Node v d) where
+  show (Node v edges) = show v -- "Node(" ++ show v ++ " -> " ++ show (map (getValue . snd) edges) ++ ")"
 
 newtype Graph v d = Graph [Node v d]
+
+instance (Show v, Show d) => Show (Graph v d) where
+  show (Graph nodes) = "Graph(" ++ show nodes ++ ")"
+
+findNode :: (Eq v) => Graph v d -> v -> Maybe (Node v d)
+findNode (Graph nodes) value = find ((== value) . getValue) nodes
 
 type PriorityQueue v d = Heap.MinPrioHeap d (Node v d)
 
@@ -35,10 +44,10 @@ type PreviousMap v d = Map.Map (Node v d) (Node v d)
 -- 6          u ← prev[u]
 getPath :: forall v d. (Eq v, Ord v, Eq d, Ord d, Num d) => Node v d -> PreviousMap v d -> [Node v d]
 getPath node previousMap = case Map.lookup node previousMap of
-  Nothing -> []
+  Nothing -> [node]
   Just prev -> node : getPath prev previousMap
 
-dijkstra :: forall v d. (Eq v, Ord v, Eq d, Ord d, Num d) => Graph v d -> Node v d -> Node v d -> (d, [Node v d])
+dijkstra :: forall v d. (Eq v, Ord v, Eq d, Ord d, Num d, Show v, Show d) => Graph v d -> Node v d -> Node v d -> (d, [Node v d])
 dijkstra (Graph nodes) start end =
   let -- for each vertex v in Graph.Vertices:
       -- dist[v] ← INFINITY
@@ -67,7 +76,7 @@ dijkstra (Graph nodes) start end =
 
       (distanceMap', previousMap') = dijkstra' queue end Set.empty distanceMap previousMap initialDistance
       distance = Map.findWithDefault initialDistance end distanceMap'
-   in (distance, getPath end previousMap')
+   in (distance {- trace (show (getValue start) ++ " -> " ++ show (getValue end) ++ " by " ++ show (map getValue (reverse (getPath end previousMap')))) -}, (reverse (getPath end previousMap')))
 
 dijkstra' ::
   (Eq v, Ord v, Eq d, Ord d, Num d) =>
