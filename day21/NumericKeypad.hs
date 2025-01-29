@@ -2,7 +2,7 @@ module NumericKeypad (NumericGridItem, numericKeypad) where
 
 import Grid (Grid (..), GridItem (..))
 
-type NumericGridItem = GridItem Char Int
+type NumericGridItem = GridItem Char
 
 -- - +---+---+---+
 -- - | 7 | 8 | 9 |

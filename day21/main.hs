@@ -10,13 +10,8 @@ import Debug.Trace (trace, traceShow, traceShowId)
 import Dijkstra (dijkstra)
 import DirectionalKeypad (DirectionalGridItem, directionalKeypad)
 import GHC.Base (maxInt)
-import GHC.List (foldl')
-import Grid (Grid (..), GridItem (..), findGridItem, isEast, isNorth, isSouth, isWest)
+import Grid (Grid (..), GridItem (..), isEast, isNorth, isSouth, isWest)
 import NumericKeypad (NumericGridItem, numericKeypad)
-
-type Path a = [a]
-
-type PathSequence a = [Path a]
 
 toPairs :: (Eq a) => [a] -> [(a, a)]
 toPairs [] = []
@@ -24,7 +19,6 @@ toPairs [a] = error "Singleton"
 toPairs [a, b] = [(a, b)]
 toPairs (a : b : rest) = if a /= b then (a, b) : toPairs (b : rest) else toPairs (b : rest)
 
--- part1 :: ([String], NumericKeypad, DirectionalKeypad) -> [[[[PathSequence DirectionalGridItem]]]]
 part1 sequences =
   map
     ( \sequence -> toPairs (fromJust (find ((== 'A') . getValue) numericKeypad) : sequence)
@@ -47,6 +41,6 @@ main = do
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
   -- print (part2 input) -- Expected: ?
-
-processInput :: String -> [[NumericGridItem]]
-processInput contents = map (map (\ch -> fromJust (find ((== ch) . getValue) numericKeypad))) (lines contents)
+  where
+    processInput :: String -> [[NumericGridItem]]
+    processInput contents = map (map (\ch -> fromJust (find ((== ch) . getValue) numericKeypad))) (lines contents)

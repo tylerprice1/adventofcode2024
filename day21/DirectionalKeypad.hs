@@ -2,7 +2,7 @@ module DirectionalKeypad (DirectionalGridItem, directionalKeypad) where
 
 import Grid (Grid (..), GridItem (..))
 
-type DirectionalGridItem = GridItem Char Int
+type DirectionalGridItem = GridItem Char
 
 -- -     +---+---+
 -- -     | ^ | A |
