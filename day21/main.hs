@@ -1,11 +1,18 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Fuse foldr/map" #-}
+{-# HLINT ignore "Avoid lambda" #-}
+{-# HLINT ignore "Avoid lambda using `infix`" #-}
 module Main (main) where
 
 import Control.DeepSeq (deepseq)
-import Data.List (intercalate, intersperse)
+import Data.Function (on)
+import Data.List (intercalate, intersperse, minimumBy)
 import Data.Maybe (fromJust)
 import Debug.Trace (trace, traceShow, traceShowId)
 import Dijkstra (dijkstra)
 import GHC.Base (maxInt)
+import GHC.List (foldl')
 import Grid (Grid (..), GridItem (..), findGridItem, isEast, isNorth, isSouth, isWest)
 
 type NumericGridItem = GridItem Char Int
@@ -43,7 +50,11 @@ data DirectionalKeypad = DirectionalKeypad
 directionalKeypadToGrid :: DirectionalKeypad -> Grid Char Int
 directionalKeypadToGrid (DirectionalKeypad a nu nd nl nr) = Grid [a, nu, nd, nl, nr]
 
-navigateToNumericKey :: NumericKeypad -> Char -> Char -> [NumericGridItem]
+type Path a = [a]
+
+type PathSequence a = [Path a]
+
+navigateToNumericKey :: NumericKeypad -> Char -> Char -> [Path NumericGridItem]
 navigateToNumericKey numericKeypad startCh endCh =
   let asGrid = numericKeypadToGrid numericKeypad
       (Grid nodes) = asGrid
@@ -51,7 +62,7 @@ navigateToNumericKey numericKeypad startCh endCh =
       !end = fromJust (findGridItem asGrid endCh)
    in snd (dijkstra nodes start end maxInt)
 
-navigateToDirectionalKey :: DirectionalKeypad -> Char -> Char -> [DirectionalGridItem]
+navigateToDirectionalKey :: DirectionalKeypad -> Char -> Char -> [Path DirectionalGridItem]
 navigateToDirectionalKey directionalKeypad startCh endCh =
   let asGrid = directionalKeypadToGrid directionalKeypad
       (Grid nodes) = asGrid
@@ -59,21 +70,7 @@ navigateToDirectionalKey directionalKeypad startCh endCh =
       !end = fromJust (findGridItem asGrid endCh)
    in snd (dijkstra nodes start end maxInt)
 
-navigateSequence :: Grid Char Int -> String -> [[NumericGridItem]]
-navigateSequence _ "" = error "Empty"
-navigateSequence _ [ch] = error ("Singleton: " ++ show ch)
-navigateSequence !grid (startCh : endCh : !s) =
-  let (Grid !gridItems) = grid
-      !start = fromJust (findGridItem grid startCh)
-      !end = fromJust (findGridItem grid endCh)
-      (_, !path) = dijkstra gridItems start end maxInt
-   in case s of
-        "" -> [path]
-        _ ->
-          let (next : rest) = navigateSequence grid (endCh : s)
-           in path : next : rest
-
-gridPathToDirectionalPath :: DirectionalKeypad -> [GridItem Char Int] -> [DirectionalGridItem]
+gridPathToDirectionalPath :: DirectionalKeypad -> [GridItem Char Int] -> Path DirectionalGridItem
 gridPathToDirectionalPath _ [] = error "Empty"
 gridPathToDirectionalPath _ [_] = [] -- error "Singleton"
 gridPathToDirectionalPath directionalKeypad (first : second : rest)
@@ -82,72 +79,61 @@ gridPathToDirectionalPath directionalKeypad (first : second : rest)
   | second `isEast` first = r : gridPathToDirectionalPath directionalKeypad (second : rest)
   | second `isWest` first = l : gridPathToDirectionalPath directionalKeypad (second : rest)
   | second `isSouth` first = d : gridPathToDirectionalPath directionalKeypad (second : rest)
-  | otherwise = error "No neighbors"
+  | otherwise = error (show second ++ " is not neighbor of " ++ show first)
   where
     (DirectionalKeypad _ u d l r) = directionalKeypad
 
-toPairs :: [a] -> [(a, a)]
+toPairs :: (Eq a, Show a) => [a] -> [(a, a)]
 toPairs [] = []
-toPairs [_] = error "Singleton"
-toPairs [a, b] = [(a, b)]
-toPairs (a : b : rest) = (a, b) : toPairs (b : rest)
+toPairs [a] = error ("Singleton: " ++ show a)
+toPairs [a, b] = traceShow ("2", a, b) [(a, b)]
+toPairs (a : b : rest) = traceShow ("3+", a, b, rest) (if a /= b then (a, b) : toPairs (b : rest) else toPairs (b : rest))
 
--- pressNumber :: Char -> Char -> NumericKeypad -> DirectionalKeypad -> [GridItem Char Int]
--- pressNumber start key numeric directional =
---   let pathToNumber = dijkstra (getNumericKeyNodes numeric) start key
---    in []
+expandSecondDirectionalPath :: Path DirectionalGridItem -> DirectionalKeypad -> [[Path DirectionalGridItem]]
+expandSecondDirectionalPath path directionalKeypad =
+  let pairs = trace ("\t\ttoPairs: " ++ show path) (toPairs path)
+   in map
+        (\(start, end) -> navigateToDirectionalKey directionalKeypad (getValue start) (getValue end))
+        pairs
 
-part1 :: ([String], NumericKeypad, DirectionalKeypad) -> [[[GridItem Char Int]]]
+expandFirstDirectionalPath :: Path DirectionalGridItem -> DirectionalKeypad -> [[[[Path DirectionalGridItem]]]]
+expandFirstDirectionalPath path directionalKeypad =
+  let pairs = trace ("\ttoPairs: " ++ show path) toPairs path
+   in map
+        ( \(start, end) ->
+            map
+              ( \path ->
+                  expandSecondDirectionalPath
+                    (gridPathToDirectionalPath directionalKeypad path ++ [getDirectionalA directionalKeypad])
+                    directionalKeypad
+              )
+              (navigateToDirectionalKey directionalKeypad (getValue start) (getValue end))
+        )
+        pairs
+
+expandNumericPath :: Path NumericGridItem -> DirectionalKeypad -> [[[[Path DirectionalGridItem]]]]
+expandNumericPath path directionalKeypad =
+  expandFirstDirectionalPath
+    (gridPathToDirectionalPath directionalKeypad path ++ [getDirectionalA directionalKeypad])
+    directionalKeypad
+
+pressNumericKey :: Char -> Char -> NumericKeypad -> DirectionalKeypad -> [[[[[Path DirectionalGridItem]]]]]
+pressNumericKey start end numericKeypad directionalKeypad =
+  map
+    (\numericPath -> expandNumericPath numericPath directionalKeypad)
+    (navigateToNumericKey numericKeypad start end)
+
+-- part1 :: ([String], NumericKeypad, DirectionalKeypad) -> [[[[PathSequence DirectionalGridItem]]]]
 part1 (sequences, numericKeypad, directionalKeypad) =
   map
     ( \sequence ->
         let directionalA = getDirectionalA directionalKeypad
-            numericDirectionalPath =
-              foldr
-                ( \(start, end) acc ->
-                    let -- numeric robot
-                        numericPath = navigateToNumericKey numericKeypad start end
-                        -- numeric robot -> directional robot
-                        numericDirectionalPath = gridPathToDirectionalPath directionalKeypad numericPath
-                     in -- directional robot -> directional human
-                        (numericDirectionalPath : [directionalA] : acc)
-                )
-                []
+            -- numeric robot
+            numericDirectionalPathSequences =
+              map
+                (\(start, end) -> pressNumericKey start end numericKeypad directionalKeypad)
                 (toPairs ('A' : sequence))
-
-            directionalDirectionalPath =
-              foldr
-                ( \(start, end) acc ->
-                    let path = navigateToDirectionalKey directionalKeypad (getValue start) (getValue end)
-                        directionalPath = gridPathToDirectionalPath directionalKeypad path
-                     in directionalPath : [directionalA] : acc
-                )
-                []
-                (toPairs (directionalA : concat numericDirectionalPath))
-
-            directionalDirectionalPath2 =
-              foldr
-                ( \(start, end) acc ->
-                    let path = navigateToDirectionalKey directionalKeypad (getValue start) (getValue end)
-                        directionalPath = gridPathToDirectionalPath directionalKeypad path
-                     in directionalPath : [directionalA] : acc
-                )
-                []
-                (toPairs (directionalA : concat directionalDirectionalPath))
-         in trace
-              ( show directionalDirectionalPath2
-                  ++ "\n"
-                  ++ map getValue (concat directionalDirectionalPath2)
-                  ++ "\n"
-                  ++ show directionalDirectionalPath
-                  ++ "\n"
-                  ++ map getValue (concat directionalDirectionalPath)
-                  ++ "\n"
-                  ++ show numericDirectionalPath
-                  ++ "\n"
-                  ++ map getValue (concat numericDirectionalPath)
-              )
-              directionalDirectionalPath2
+         in numericDirectionalPathSequences
     )
     (take 1 sequences)
 

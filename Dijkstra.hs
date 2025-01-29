@@ -5,6 +5,7 @@ module Dijkstra (Node (getEdges), dijkstra) where
 import Data.Heap qualified as Heap
 import Data.Map qualified as Map
 import Data.Set qualified as Set
+import Debug.Trace (traceShowId)
 
 class Node n d where
   getEdges :: n -> [(d, n)]
@@ -15,21 +16,26 @@ type Visited n = Set.Set n
 
 type DistanceMap n d = Map.Map n d
 
-type PreviousMap n = Map.Map n n
+type PreviousMap n = Map.Map n [n]
+
+getPaths :: (Eq n, Ord n) => n -> PreviousMap n -> [[n]]
+getPaths !node !previousMap = case Map.lookup node previousMap of
+  Nothing -> [[node]]
+  Just prevs -> concatMap (\prev -> map (node :) (getPaths prev previousMap)) prevs
 
 getPath :: (Eq n, Ord n) => n -> PreviousMap n -> [n]
 getPath node previousMap = case Map.lookup node previousMap of
   Nothing -> [node]
-  Just prev -> node : getPath prev previousMap
+  Just (prev : _) -> node : getPath prev previousMap
 
 dijkstra ::
   forall n d.
-  (Eq n, Ord n, Eq d, Ord d, Num d, Node n d) =>
+  (Eq n, Ord n, Eq d, Ord d, Num d, Node n d, Show n) =>
   [n] ->
   n ->
   n ->
   d ->
-  (d, [n])
+  (d, [[n]])
 dijkstra nodes start end maxDistance =
   let distanceMap = Map.singleton start 0
       previousMap = Map.empty
@@ -39,11 +45,11 @@ dijkstra nodes start end maxDistance =
 
       (distanceMap', previousMap') = dijkstra' queue end Set.empty distanceMap previousMap maxDistance
       distance = Map.findWithDefault maxDistance end distanceMap'
-      path = getPath end previousMap'
-   in (distance, reverse path)
+      !paths = map reverse (getPaths end ({- traceShowId -} previousMap'))
+   in (distance, paths)
 
 dijkstra' ::
-  (Eq n, Ord n, Eq d, Ord d, Num d, Node n d) =>
+  (Eq n, Ord n, Eq d, Ord d, Num d, Node n d, Show n) =>
   PriorityQueue n d ->
   n ->
   Visited n ->
@@ -56,12 +62,12 @@ dijkstra' queue end visited distanceMap previousMap maxDistance = case Heap.view
   Just ((distance, node), unvisited) ->
     if distance <= maxDistance && node /= end
       then
-        let edges = filter ((`Set.notMember` visited) . snd) (getEdges node)
+        let edges = getEdges node
 
             (unvisited', distanceMap', previousMap') =
               foldr
-                ( \(edgeDistance, neighbor) (q, distMap, prevMap) ->
-                    updatePosition node neighbor edgeDistance maxDistance q distMap prevMap
+                ( \(edgeWeight, neighbor) (q, distMap, prevMap) ->
+                    updatePosition node neighbor (distance + edgeWeight) maxDistance q distMap prevMap
                 )
                 (unvisited, distanceMap, previousMap)
                 edges
@@ -71,7 +77,7 @@ dijkstra' queue end visited distanceMap previousMap maxDistance = case Heap.view
 
 {-# INLINE updatePosition #-}
 updatePosition ::
-  (Eq n, Ord n, Eq d, Ord d, Num d, Node n d) =>
+  (Eq n, Ord n, Eq d, Ord d, Num d, Node n d, Show n) =>
   n ->
   n ->
   d ->
@@ -81,10 +87,16 @@ updatePosition ::
   PreviousMap n ->
   (PriorityQueue n d, DistanceMap n d, PreviousMap n)
 updatePosition prevNode node distance maxDistance queue distanceMap previousMap =
-  if distance < Map.findWithDefault maxDistance node distanceMap
-    then
-      -- dist[v] ← alt
-      -- prev[v] ← u
-      (Heap.insert (distance, node) queue, Map.insert node distance distanceMap, Map.insert node prevNode previousMap)
-    else
-      (queue, distanceMap, previousMap)
+  let oldDistance = Map.findWithDefault maxDistance node distanceMap
+   in case compare distance oldDistance of
+        LT ->
+          ( Heap.insert (distance, node) queue,
+            Map.insert node distance distanceMap,
+            Map.insert node [prevNode] previousMap
+          )
+        EQ ->
+          ( queue,
+            distanceMap,
+            Map.insert node (prevNode : Map.findWithDefault [] node previousMap) previousMap
+          )
+        GT -> (queue, distanceMap, previousMap)
