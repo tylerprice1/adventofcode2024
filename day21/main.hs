@@ -3,6 +3,7 @@
 {-# HLINT ignore "Fuse foldr/map" #-}
 {-# HLINT ignore "Avoid lambda" #-}
 {-# HLINT ignore "Avoid lambda using `infix`" #-}
+{-# HLINT ignore "Redundant bracket" #-}
 module Main (main) where
 
 import Control.DeepSeq (deepseq)
@@ -86,42 +87,49 @@ gridPathToDirectionalPath directionalKeypad (first : second : rest)
 toPairs :: (Eq a, Show a) => [a] -> [(a, a)]
 toPairs [] = []
 toPairs [a] = error ("Singleton: " ++ show a)
-toPairs [a, b] = traceShow ("2", a, b) [(a, b)]
-toPairs (a : b : rest) = traceShow ("3+", a, b, rest) (if a /= b then (a, b) : toPairs (b : rest) else toPairs (b : rest))
+toPairs [a, b] = [(a, b)]
+toPairs (a : b : rest) = if a /= b then (a, b) : toPairs (b : rest) else toPairs (b : rest)
 
-expandSecondDirectionalPath :: Path DirectionalGridItem -> DirectionalKeypad -> [[Path DirectionalGridItem]]
+expandSecondDirectionalPath :: Path DirectionalGridItem -> DirectionalKeypad -> Path DirectionalGridItem
 expandSecondDirectionalPath path directionalKeypad =
-  let pairs = trace ("\t\ttoPairs: " ++ show path) (toPairs path)
-   in map
-        (\(start, end) -> navigateToDirectionalKey directionalKeypad (getValue start) (getValue end))
-        pairs
-
-expandFirstDirectionalPath :: Path DirectionalGridItem -> DirectionalKeypad -> [[[[Path DirectionalGridItem]]]]
-expandFirstDirectionalPath path directionalKeypad =
-  let pairs = trace ("\ttoPairs: " ++ show path) toPairs path
-   in map
+  let pairs = toPairs (getDirectionalA directionalKeypad : path)
+   in concatMap
         ( \(start, end) ->
-            map
-              ( \path ->
-                  expandSecondDirectionalPath
-                    (gridPathToDirectionalPath directionalKeypad path ++ [getDirectionalA directionalKeypad])
-                    directionalKeypad
-              )
-              (navigateToDirectionalKey directionalKeypad (getValue start) (getValue end))
+            head (navigateToDirectionalKey directionalKeypad (getValue start) (getValue end))
         )
         pairs
 
-expandNumericPath :: Path NumericGridItem -> DirectionalKeypad -> [[[[Path DirectionalGridItem]]]]
+expandFirstDirectionalPath path directionalKeypad =
+  let pairs = toPairs (getDirectionalA directionalKeypad : path)
+   in {- minimumBy
+        (compare `on` length)
+         -} ( map
+                ( \(start, end) ->
+                    map
+                      ( \path ->
+                          expandSecondDirectionalPath
+                            ( gridPathToDirectionalPath directionalKeypad path
+                                ++ [getDirectionalA directionalKeypad]
+                            )
+                            directionalKeypad
+                      )
+                      (navigateToDirectionalKey directionalKeypad (getValue start) (getValue end))
+                )
+                pairs
+            )
+
 expandNumericPath path directionalKeypad =
   expandFirstDirectionalPath
     (gridPathToDirectionalPath directionalKeypad path ++ [getDirectionalA directionalKeypad])
     directionalKeypad
 
-pressNumericKey :: Char -> Char -> NumericKeypad -> DirectionalKeypad -> [[[[[Path DirectionalGridItem]]]]]
 pressNumericKey start end numericKeypad directionalKeypad =
-  map
-    (\numericPath -> expandNumericPath numericPath directionalKeypad)
-    (navigateToNumericKey numericKeypad start end)
+  {- minimumBy
+    (compare `on` length) -}
+  ( map
+      (\numericPath -> expandNumericPath numericPath directionalKeypad)
+      (navigateToNumericKey numericKeypad start end)
+  )
 
 -- part1 :: ([String], NumericKeypad, DirectionalKeypad) -> [[[[PathSequence DirectionalGridItem]]]]
 part1 (sequences, numericKeypad, directionalKeypad) =
