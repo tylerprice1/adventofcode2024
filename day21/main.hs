@@ -1,5 +1,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
+{-# HLINT ignore "Avoid lambda" #-}
+
 module Main (main) where
 
 import Control.DeepSeq (deepseq)
@@ -17,11 +19,20 @@ toPairs :: (Eq a) => [a] -> [(a, a)]
 toPairs [] = []
 toPairs [a] = error "Singleton"
 toPairs [a, b] = [(a, b)]
-toPairs (a : b : rest) = if a /= b then (a, b) : toPairs (b : rest) else toPairs (b : rest)
+toPairs (a : b : rest)
+  | a == b = toPairs (b : rest)
+  | otherwise = (a, b) : toPairs (b : rest)
 
 part1 sequences =
   map
-    ( \sequence -> toPairs (fromJust (find ((== 'A') . getValue) numericKeypad) : sequence)
+    ( \sequence ->
+        foldr
+          ( \(s, e) acc ->
+              let paths = snd (dijkstra numericKeypad s e maxInt)
+               in if null acc then [map tail paths] else concatMap (\p -> map (tail p :) acc) paths
+          )
+          []
+          (toPairs sequence)
     )
     (take 1 sequences)
 
@@ -43,4 +54,14 @@ main = do
   -- print (part2 input) -- Expected: ?
   where
     processInput :: String -> [[NumericGridItem]]
-    processInput contents = map (map (\ch -> fromJust (find ((== ch) . getValue) numericKeypad))) (lines contents)
+    processInput contents =
+      let a = fromJust (find ((== 'A') . getValue) numericKeypad)
+       in map
+            ( (a :)
+                . ( \line ->
+                      map
+                        (\ch -> fromJust (find ((== ch) . getValue) numericKeypad))
+                        line
+                  )
+            )
+            (lines contents)
