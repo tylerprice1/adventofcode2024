@@ -41,4 +41,5 @@ instance (Ord v) => Ord (GridItem v) where
   (>=) (GridItem a _ _ _ _) (GridItem b _ _ _ _) = a >= b
 
 instance (Show v) => Show (GridItem v) where
-  show (GridItem v _ _ _ _) = show v
+  show = show . getValue
+  showList = showList . map getValue
