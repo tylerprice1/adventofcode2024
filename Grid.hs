@@ -1,7 +1,9 @@
 module Grid (Grid (..), GridItem (..), isNorth, isEast, isSouth, isWest) where
 
+import Control.DeepSeq (NFData (..))
 import Data.List (find)
 import Data.Maybe (catMaybes)
+import GHC.Generics (Generic)
 import Node (Node (getEdges))
 
 newtype Grid v = Grid [GridItem v]
@@ -9,6 +11,10 @@ newtype Grid v = Grid [GridItem v]
 type Edge v = (Int, GridItem v)
 
 data GridItem v = GridItem {getValue :: v, getNorth :: Maybe (Edge v), getEast :: Maybe (Edge v), getSouth :: Maybe (Edge v), getWest :: Maybe (Edge v)}
+  deriving (Generic)
+
+instance (NFData v) => NFData (GridItem v) where
+  rnf (GridItem v _ _ _ _) = ()
 
 {-# INLINE isNorth #-}
 isNorth :: (Eq v) => GridItem v -> GridItem v -> Bool

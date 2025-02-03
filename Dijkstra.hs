@@ -20,15 +20,17 @@ getPaths node previousMap = case Map.lookup node previousMap of
   Just prevs -> concatMap (\prev -> map (node :) (getPaths prev previousMap)) prevs
 
 dijkstra :: (HasCallStack) => (Eq n, Ord n, Eq d, Ord d, Num d, Node n d) => [n] -> n -> n -> d -> (d, [[n]])
-dijkstra nodes start end maxDistance =
-  let distanceMap = Map.singleton start 0
-      previousMap = Map.empty
-      queue = foldr (\node -> Heap.insert (if node /= start then maxDistance else 0, node)) Heap.empty nodes
+dijkstra nodes start end maxDistance
+  | start == end = (0, [])
+  | otherwise =
+      let distanceMap = Map.singleton start 0
+          previousMap = Map.empty
+          queue = foldr (\node -> Heap.insert (if node /= start then maxDistance else 0, node)) Heap.empty nodes
 
-      (distanceMap', previousMap') = dijkstra' end maxDistance queue Set.empty (distanceMap, previousMap)
-      distance = Map.findWithDefault maxDistance end distanceMap'
-      !paths = map reverse (getPaths end previousMap')
-   in (distance, paths)
+          (distanceMap', previousMap') = dijkstra' end maxDistance queue Set.empty (distanceMap, previousMap)
+          distance = Map.findWithDefault maxDistance end distanceMap'
+          paths = map reverse (getPaths end previousMap')
+       in (distance, paths)
 
 dijkstra' :: (HasCallStack) => (Eq n, Ord n, Eq d, Ord d, Num d, Node n d) => n -> d -> Queue n d -> Visited n -> (DistanceMap n d, PreviousMap n) -> (DistanceMap n d, PreviousMap n)
 dijkstra' end maxDistance queue visited maps = case Heap.view queue of

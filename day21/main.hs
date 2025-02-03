@@ -24,7 +24,9 @@ toPairs :: (HasCallStack) => (Eq a) => [a] -> [(a, a)]
 toPairs [] = []
 toPairs [a] = error "Singleton"
 toPairs [a, b] = [(a, b)]
-toPairs (a : b : rest) = (a, b) : toPairs (b : rest)
+toPairs (a : b : rest) =
+  --- | a == b = toPairs (b : rest)
+  (a, b) : toPairs (b : rest)
 
 navigate :: (HasCallStack) => [GridItem Char] -> [GridItem Char] -> [[[GridItem Char]]]
 navigate sequence keypad =
@@ -40,6 +42,7 @@ toDirectionalPath :: (HasCallStack) => [GridItem Char] -> [GridItem Char]
 toDirectionalPath [] = []
 toDirectionalPath [only] = error ("Singleton: " ++ show only)
 toDirectionalPath (a : b : rest)
+  | a == b = head directionalKeypad : remaining
   | b `isNorth` a = u : remaining
   | b `isEast` a = r : remaining
   | b `isSouth` a = d : remaining
@@ -51,34 +54,29 @@ toDirectionalPath (a : b : rest)
 
 part1 sequences =
   map
-    ( \sequence ->
+    ( \numericSequence ->
         let -- numeric robot
             -- get all possible paths for each key pressed
-            numericPathSequences = take 1 (navigate sequence numericKeypad)
+            numericPathSequences = (navigate numericSequence numericKeypad)
 
             -- convert paths of positions to directions moved
             directionalNumericPathSequences = map (map toDirectionalPath) numericPathSequences
 
-            -- press after navigating to each key
-            withA = map (concatMap (\path -> path : [take 1 directionalKeypad])) directionalNumericPathSequences
+            -- press A after navigating to each key
+            withA = map (concatMap (: [take 1 directionalKeypad])) directionalNumericPathSequences
 
             -- combine each possible path into a single list
-            withAConcat = map concat withA
+            withAConcat = (map (concat) withA)
 
             -- directional robot
+            directionalSequences = (map (head directionalKeypad :) withAConcat)
 
             -- get all possible paths for each key pressed
-            directionalPathSequencess = map (take 1 . (`navigate` directionalKeypad) . (head directionalKeypad :)) withAConcat
+            directionalPathSequences = map ((`navigate` directionalKeypad)) directionalSequences
 
             -- convert paths of positions to directions moved
-            directionalDirectionalPathSequencess = map (map (map toDirectionalPath)) directionalPathSequencess
-
-            withA' = map (map (concatMap (\path -> path : [take 1 directionalKeypad]))) directionalDirectionalPathSequencess
-
-            withAConcat' = map (map concat) withA'
-
-            sequencess = map (concatMap (`navigate` directionalKeypad)) withAConcat'
-         in directionalPathSequencess
+            directionalDirectionalPathSequences = map (map (toDirectionalPath . traceShowId . concat . traceShowId)) (directionalPathSequences)
+         in directionalDirectionalPathSequences
     )
     (take 1 sequences)
 
@@ -93,7 +91,8 @@ main = do
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  print (part1 test) -- Expected: ?
+  let part1_test = part1 test
+  part1_test `deepseq` print part1_test -- Expected: ?
   -- print (part1 input) -- Expected: ?
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
