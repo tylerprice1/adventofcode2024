@@ -2,14 +2,14 @@
 
 {-# HLINT ignore "Avoid lambda" #-}
 {-# HLINT ignore "Use map once" #-}
-{-# HLINT ignore "Redundant bracket" #-}
+-- {-# HLINT ignore "Redundant bracket" #-}
 {-# HLINT ignore "Use concatMap" #-}
 {-# HLINT ignore "Redundant guard" #-}
 {-# HLINT ignore "Use id" #-}
 
 module Main (main) where
 
-import Control.DeepSeq (deepseq)
+import Control.DeepSeq (NFData (..), deepseq)
 import Data.Function (on)
 import Data.List (find, group, minimumBy, sort, sortBy)
 import Data.Maybe (fromJust)
@@ -27,12 +27,18 @@ type Key = GridItem Char
 data KeyPress = KeyPress {getKey :: Key, getNumPresses :: Int}
   deriving (Eq, Ord)
 
-instance Node (KeyPress) Int where
+instance NFData KeyPress where
+  rnf (KeyPress key _) = rnf key
+
+keyPressToKeys :: KeyPress -> [Key]
+keyPressToKeys (KeyPress key n) = replicate n key
+
+instance Node KeyPress Int where
   getEdges (KeyPress key _) = map (\(d, n) -> (d, n `KeyPress` 1)) (getEdges key)
 
 instance Show KeyPress where
-  show (KeyPress key n) = (replicate n (getValue key))
-  showList keys = showList ((concatMap (\(KeyPress key n) -> replicate n (getValue key)) keys))
+  show (KeyPress key n) = replicate n (getValue key)
+  showList keys = showList (concatMap (\(KeyPress key n) -> replicate n (getValue key)) keys)
 
 toPairs :: (HasCallStack) => [a] -> [(a, a)]
 toPairs [] = []
@@ -51,16 +57,17 @@ pairToDirection (from, to)
     [a, u, d, l, r] = directionalKeypad
 
 toDirectionalPath :: (HasCallStack, Eq a) => [GridItem a] -> [DirectionalGridItem]
-toDirectionalPath path = map (pairToDirection) (toPairs path)
+toDirectionalPath path = map pairToDirection (toPairs path)
 
 pressKeys :: (HasCallStack) => [Key] -> [Key] -> [[[KeyPress]]]
 pressKeys sequence keypad =
   foldr
     ( \(s, e) acc ->
-        let paths = snd (dijkstra keypad (s) (e) maxInt)
+        let paths = snd (dijkstra keypad s e maxInt)
             directionalPaths = map toDirectionalPath paths
-            keyPresses = map (\path -> map (\g -> KeyPress (head g) (length g)) (group path)) (directionalPaths)
-         in if null acc then [keyPresses] else concatMap (\p -> map (p :) acc) keyPresses
+            keyPresses = map (map (\g -> KeyPress (head g) (length g)) . group) (traceShowId directionalPaths `deepseq` directionalPaths)
+            withA = map (\presses -> concatMap (\(KeyPress key n) -> [KeyPress key 1, KeyPress (head directionalKeypad) n]) presses) (traceShowId keyPresses `deepseq` keyPresses)
+         in traceShowId withA `deepseq` if null acc then [withA] else concatMap (\p -> map (p :) acc) withA
     )
     []
     (toPairs sequence)
@@ -74,18 +81,18 @@ part1 sequences =
 
             -- combine each possible path into a single list
             withAConcat = map concat numericPathSequences
-         in sortBy (compare `on` length) numericPathSequences
-        -- withAConcat' =
-        --   concatMap
-        --     ( \sequence ->
-        --         let -- get all possible paths for each key pressed
-        --             pathSequences = pressKeys sequence directionalKeypad
+            withAConcat' =
+              concatMap
+                ( \sequence ->
+                    let -- get all possible paths for each key pressed
+                        pathSequences = pressKeys (concatMap ((head directionalKeypad :) . keyPressToKeys) sequence) directionalKeypad
 
-        --             -- combine each possible path into a single list
-        --             withAConcat = map concat pathSequences
-        --          in withAConcat
-        --     )
-        --     withAConcat
+                        -- combine each possible path into a single list
+                        withAConcat = map concat pathSequences
+                     in withAConcat `deepseq` withAConcat
+                )
+                (withAConcat `deepseq` withAConcat)
+         in sortBy (compare `on` length) withAConcat'
     )
     (take 1 sequences)
 
