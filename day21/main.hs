@@ -59,6 +59,11 @@ pairToDirection (from, to)
 toDirectionalPath :: (HasCallStack, Eq a) => [GridItem a] -> [DirectionalGridItem]
 toDirectionalPath path = map pairToDirection (toPairs path)
 
+-- moveToKey :: Key -> Key -> [Key] -> [Key]
+moveToKey start end keypad = snd paths
+  where
+    paths = dijkstra keypad start end maxInt
+
 pressKeys :: (HasCallStack) => [Key] -> [Key] -> [[[KeyPress]]]
 pressKeys sequence keypad =
   foldr
@@ -106,13 +111,15 @@ main = do
   inputFile <- readFile "./input.txt"
   let input = processInput inputFile
 
-  putStrLn "\n----- Part 1 -----"
-  let part1_test = part1 test
-  print part1_test -- Expected: ?
+  -- putStrLn "\n----- Part 1 -----"
+  -- let part1_test = part1 test
+  -- print part1_test -- Expected: ?
   -- print (part1 input) -- Expected: ?
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
   -- print (part2 input) -- Expected: ?
+
+  print (moveToKey (numericKeypad !! 2) (numericKeypad !! 9) numericKeypad)
   where
     processInput :: (HasCallStack) => String -> [[NumericGridItem]]
     processInput contents =
