@@ -1,32 +1,16 @@
-module DirectionalKeypad (DirectionalKey (..), directionalKeypad) where
+module DirectionalKeypad (DirectionalGridItem, directionalKeypad) where
 
-import Data.Bifunctor (second)
-import Grid (Grid (..))
-import GridItem (GridItem (..))
-import Node (Graph (..))
+import Grid (Grid (..), GridItem (..))
 
-newtype DirectionalKey = DirectionalKey (GridItem Char)
-  deriving (Eq, Ord)
-
-instance Show DirectionalKey where
-  show (DirectionalKey gi) = show gi
-
-instance Graph DirectionalKey Int where
-  getEdges (DirectionalKey gi) = map (second DirectionalKey) (getEdges gi)
-
-instance Grid DirectionalKey where
-  getNorth (DirectionalKey gi) = (Just . second DirectionalKey) =<< getNorth gi
-  getEast (DirectionalKey gi) = (Just . second DirectionalKey) =<< getEast gi
-  getSouth (DirectionalKey gi) = (Just . second DirectionalKey) =<< getSouth gi
-  getWest (DirectionalKey gi) = (Just . second DirectionalKey) =<< getWest gi
+type DirectionalGridItem = GridItem Char
 
 -- -     +---+---+
 -- -     | ^ | A |
 -- - +---+---+---+
 -- - | < | v | > |
 -- - +---+---+---+
-directionalKeypad :: [DirectionalKey]
-directionalKeypad = map DirectionalKey [nA, nU, nD, nL, nR]
+directionalKeypad :: [DirectionalGridItem]
+directionalKeypad = [nA, nU, nD, nL, nR]
   where
     edge node = (1, node)
 
