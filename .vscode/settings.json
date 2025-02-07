@@ -1,12 +1,13 @@
 {
   "cSpell.words": [
+    "Bifunctor",
     "cheatless",
-    "INLINEABLE",
     "Eithers",
     "foldl",
     "foldr",
     "HLINT",
     "imap",
+    "INLINEABLE",
     "ints",
     "Prio",
     "pseq",

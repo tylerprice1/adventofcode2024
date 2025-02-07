@@ -1,6 +1,6 @@
-module Node (Edge, Node (getEdges)) where
+module Node (Edge, Graph (..)) where
 
 type Edge n d = (d, n)
 
-class Node n d where
+class Graph n d where
   getEdges :: n -> [Edge n d]

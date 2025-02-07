@@ -1,51 +1,23 @@
-module Grid (Grid (..), GridItem (..), isNorth, isEast, isSouth, isWest) where
+module Grid (Grid (..), isNorth, isEast, isSouth, isWest) where
 
-import Control.DeepSeq (NFData (..))
 import Data.List (find)
 import Data.Maybe (catMaybes)
-import GHC.Generics (Generic)
-import Node (Node (getEdges))
+import Node (Edge, Graph (getEdges))
 
-newtype Grid v = Grid [GridItem v]
+class Grid n where
+  getNorth :: n -> Maybe (Edge n Int)
+  getEast :: n -> Maybe (Edge n Int)
+  getSouth :: n -> Maybe (Edge n Int)
+  getWest :: n -> Maybe (Edge n Int)
 
-type Edge v = (Int, GridItem v)
+isNorth :: (Eq n, Grid n) => n -> n -> Bool
+isNorth a b = maybe False (\(_, b) -> a == b) (getNorth b)
 
-data GridItem v = GridItem {getValue :: v, getNorth :: Maybe (Edge v), getEast :: Maybe (Edge v), getSouth :: Maybe (Edge v), getWest :: Maybe (Edge v)}
-  deriving (Generic)
+isEast :: (Eq n, Grid n) => n -> n -> Bool
+isEast a b = maybe False (\(_, b) -> a == b) (getEast b)
 
-instance (NFData v) => NFData (GridItem v) where
-  rnf (GridItem v _ _ _ _) = ()
+isSouth :: (Eq n, Grid n) => n -> n -> Bool
+isSouth a b = maybe False (\(_, b) -> a == b) (getSouth b)
 
-{-# INLINE isNorth #-}
-isNorth :: (Eq v) => GridItem v -> GridItem v -> Bool
-isNorth n (GridItem _ north _ _ _) = maybe False (\(_, gi) -> n == gi) north
-
-{-# INLINE isEast #-}
-isEast :: (Eq v) => GridItem v -> GridItem v -> Bool
-isEast n (GridItem _ _ east _ _) = maybe False (\(_, gi) -> n == gi) east
-
-{-# INLINE isSouth #-}
-isSouth :: (Eq v) => GridItem v -> GridItem v -> Bool
-isSouth n (GridItem _ _ _ south _) = maybe False (\(_, gi) -> n == gi) south
-
-{-# INLINE isWest #-}
-isWest :: (Eq v) => GridItem v -> GridItem v -> Bool
-isWest n (GridItem _ _ _ _ west) = maybe False (\(_, gi) -> n == gi) west
-
-instance (Node (GridItem v) Int) where
-  getEdges (GridItem _ n e s w) = catMaybes [n, e, s, w]
-
-instance (Eq v) => Eq (GridItem v) where
-  (==) (GridItem a _ _ _ _) (GridItem b _ _ _ _) = a == b
-  (/=) (GridItem a _ _ _ _) (GridItem b _ _ _ _) = a /= b
-
-instance (Ord v) => Ord (GridItem v) where
-  compare (GridItem a _ _ _ _) (GridItem b _ _ _ _) = compare a b
-  (<) (GridItem a _ _ _ _) (GridItem b _ _ _ _) = a < b
-  (<=) (GridItem a _ _ _ _) (GridItem b _ _ _ _) = a <= b
-  (>) (GridItem a _ _ _ _) (GridItem b _ _ _ _) = a > b
-  (>=) (GridItem a _ _ _ _) (GridItem b _ _ _ _) = a >= b
-
-instance (Show v) => Show (GridItem v) where
-  show = show . getValue
-  showList = showList . map getValue
+isWest :: (Eq n, Grid n) => n -> n -> Bool
+isWest a b = maybe False (\(_, b) -> a == b) (getWest b)
