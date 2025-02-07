@@ -1,8 +1,24 @@
-module NumericKeypad (NumericGridItem, numericKeypad) where
+module NumericKeypad (NumericKey (..), numericKeypad) where
 
-import Grid (Grid (..), GridItem (..))
+import Data.Bifunctor (second)
+import Grid (Grid (..))
+import GridItem (GridItem (..))
+import Node (Graph (..))
 
-type NumericGridItem = GridItem Char
+newtype NumericKey = NumericKey (GridItem Char)
+  deriving (Eq, Ord)
+
+instance Show NumericKey where
+  show (NumericKey gi) = show gi
+
+instance Graph NumericKey Int where
+  getEdges (NumericKey gi) = map (second NumericKey) (getEdges gi)
+
+instance Grid NumericKey where
+  getNorth (NumericKey gi) = (Just . second NumericKey) =<< getNorth gi
+  getEast (NumericKey gi) = (Just . second NumericKey) =<< getEast gi
+  getSouth (NumericKey gi) = (Just . second NumericKey) =<< getSouth gi
+  getWest (NumericKey gi) = (Just . second NumericKey) =<< getWest gi
 
 -- - +---+---+---+
 -- - | 7 | 8 | 9 |
@@ -13,8 +29,8 @@ type NumericGridItem = GridItem Char
 -- - +---+---+---+
 -- -     | 0 | A |
 -- -     +---+---+
-numericKeypad :: [NumericGridItem]
-numericKeypad = [nA, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9]
+numericKeypad :: [NumericKey]
+numericKeypad = map NumericKey [nA, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9]
   where
     edge n = (1, n)
 
