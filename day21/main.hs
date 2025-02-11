@@ -9,6 +9,7 @@
 {-# HLINT ignore "Use uncurry" #-}
 {-# HLINT ignore "Eta reduce" #-}
 {-# HLINT ignore "Use lambda-case" #-}
+{-# HLINT ignore "Fuse mapM_/map" #-}
 
 module Main (main) where
 
@@ -16,7 +17,7 @@ import Data.Function (on)
 import Data.List (find, group, groupBy, minimumBy, sort, sortBy, uncons)
 import Data.Maybe (fromJust)
 import Debug.Trace (trace, traceShow, traceShowId)
-import Dijkstra (Path (..), Paths (..), dijkstra, fromPath, pathHead, pathsHead)
+import Dijkstra (dijkstra)
 import DirectionalKeypad (DirectionalKey, directionalKeypad)
 import GHC.Base (maxInt)
 import GHC.Stack (HasCallStack)
@@ -41,28 +42,48 @@ pairToDirection (from, to)
   where
     [a, u, d, l, r] = directionalKeypad
 
-toDirectionalPath :: (HasCallStack, Eq a, Grid a) => Path a -> Path DirectionalKey
-toDirectionalPath (Path path) = Path (map pairToDirection (toPairs path))
+toDirectionalPath :: (HasCallStack, Eq a, Grid a) => [a] -> [DirectionalKey]
+toDirectionalPath path = map pairToDirection (toPairs path)
 
-navigateSequence :: (HasCallStack, Eq n, Ord n, Graph n Int) => [n] -> [n] -> [Paths n]
-navigateSequence keys keypad = map (\(start, end) -> moveToKey start end keypad) (toPairs keys)
+navigateSequence :: (HasCallStack, Eq n, Ord n, Graph n Int, Grid n) => [n] -> [n] -> [[[DirectionalKey]]]
+navigateSequence keys keypad = map (\(start, end) -> pressKey start end keypad) (toPairs keys)
 
-moveToKey :: (HasCallStack, Eq n, Ord n, Graph n Int) => n -> n -> [n] -> Paths n
-moveToKey start end keypad = snd (dijkstra keypad start end maxInt)
+moveToKey :: (HasCallStack, Eq n, Ord n, Graph n Int, Grid n) => n -> n -> [n] -> [[DirectionalKey]]
+moveToKey start end keypad = map toDirectionalPath (snd (dijkstra keypad start end maxInt))
 
-newtype NumericRobotPaths = NumericRobotPaths (Paths NumericKey)
-  deriving (Show)
+pressKey :: (HasCallStack, Eq n, Ord n, Graph n Int, Grid n) => n -> n -> [n] -> [[DirectionalKey]]
+pressKey start end keypad = map (++ take 1 directionalKeypad) (moveToKey start end keypad)
 
-numericRobot :: (HasCallStack) => NumericKey -> NumericKey -> NumericRobotPaths
-numericRobot start end = NumericRobotPaths (moveToKey start end numericKeypad)
+enterKeys :: (HasCallStack, Eq n, Ord n, Graph n Int, Grid n, Show n) => [n] -> [n] -> Int -> [DirectionalKey]
+enterKeys keys keypad 0 = toDirectionalPath keys
+enterKeys keys keypad maxDepth =
+  traceShow
+    (maxDepth, keys)
+    ( concatMap
+        ( \(start, end) ->
+            let paths = pressKey start end keypad
+             in if null paths
+                  then []
+                  else
+                    minimumBy (compare `on` length) (map (\p -> enterKeys p directionalKeypad (maxDepth - 1)) paths)
+        )
+        (toPairs keys)
+    )
 
-directionalRobot :: (HasCallStack) => DirectionalKey -> DirectionalKey -> Paths DirectionalKey
-directionalRobot start end = moveToKey start end directionalKeypad
-
-directionalHuman :: (HasCallStack) => DirectionalKey -> DirectionalKey -> Paths DirectionalKey
-directionalHuman start end = moveToKey start end directionalKeypad
-
-part1 sequences = sequences
+part1 :: [[NumericKey]] -> [[DirectionalKey]]
+part1 sequences =
+  map
+    ( \s ->
+        let sequencePaths = navigateSequence s numericKeypad
+         in concatMap
+              ( \paths ->
+                  minimumBy
+                    (compare `on` length)
+                    (map ((\path -> enterKeys path directionalKeypad 2) . (head directionalKeypad :)) paths)
+              )
+              sequencePaths
+    )
+    sequences
 
 part2 input = input
 
@@ -75,33 +96,22 @@ main = do
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  -- let part1_test = part1 test
-  -- print part1_test -- Expected: ?
+  let part1_test = part1 test
+  print part1_test -- Expected: ?
   -- print (part1 input) -- Expected: ?
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
   -- print (part2 input) -- Expected: ?
-
-  putStrLn "numericRobot"
-  let num = numericRobot n2 n9
-  print num
-  print (Paths ((\(NumericRobotPaths (Paths paths)) -> map toDirectionalPath paths) num))
-  putStrLn ""
-
-  putStrLn "directionalRobot"
-  let dirR = directionalRobot nD ndA
-  print dirR
-  print (Paths ((\(Paths paths) -> map toDirectionalPath paths) dirR))
-  putStrLn ""
-
-  putStrLn "directionalHuman"
-  let dirH = directionalHuman ndA nL
-  print dirH
-  print (Paths ((\(Paths paths) -> map toDirectionalPath paths) dirH))
-  putStrLn ""
   where
-    -- putStrLn "navigateSequence"
-    -- mapM_ print (navigateSequence (head test) numericKeypad)
+    -- putStrLn "Test"
+    -- (mapM_ . mapM_)
+    --   print
+    --   ( map
+    --       ( \k1 ->
+    --           map (\k2 -> (k1, k2, moveToKey k1 k2 directionalKeypad)) directionalKeypad
+    --       )
+    --       directionalKeypad
+    --   )
     -- putStrLn ""
 
     [nA, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9] = numericKeypad
