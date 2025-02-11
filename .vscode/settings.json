@@ -9,6 +9,7 @@
     "imap",
     "INLINEABLE",
     "ints",
+    "prevs",
     "Prio",
     "pseq",
     "rdeepseq",

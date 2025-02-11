@@ -1,4 +1,4 @@
-module Dijkstra (dijkstra, Path (..), Paths (..), pathHead, fromPath, pathsHead, fromPaths) where
+module Dijkstra (dijkstra) where
 
 import Data.Foldable (Foldable (..), toList)
 import Data.Heap qualified as Heap
@@ -15,32 +15,14 @@ type DistanceMap n d = Map.Map n d
 
 type PreviousMap n = Map.Map n [n]
 
-newtype Path n = Path [n]
-  deriving (Foldable, Show)
-
-pathHead :: Path a -> a
-pathHead (Path ns) = head ns
-
-fromPath :: Path a -> [a]
-fromPath (Path as) = as
-
-newtype Paths n = Paths [Path n]
-  deriving (Foldable, Show)
-
-pathsHead :: Paths a -> Path a
-pathsHead (Paths ns) = head ns
-
-fromPaths :: Paths a -> [Path a]
-fromPaths (Paths as) = as
-
 getPaths :: (HasCallStack) => (Eq n, Ord n) => n -> PreviousMap n -> [[n]]
 getPaths node previousMap = case Map.lookup node previousMap of
   Nothing -> [[node]]
   Just prevs -> concatMap (\prev -> map (node :) (getPaths prev previousMap)) prevs
 
-dijkstra :: (HasCallStack) => (Eq n, Ord n, Eq d, Ord d, Num d, Graph n d) => [n] -> n -> n -> d -> (d, Paths n)
+dijkstra :: (HasCallStack) => (Eq n, Ord n, Eq d, Ord d, Num d, Graph n d) => [n] -> n -> n -> d -> (d, [[n]])
 dijkstra nodes start end maxDistance
-  | start == end = (0, Paths [])
+  | start == end = (0, [])
   | otherwise =
       let distanceMap = Map.singleton start 0
           previousMap = Map.empty
@@ -49,7 +31,7 @@ dijkstra nodes start end maxDistance
           (distanceMap', previousMap') = dijkstra' end maxDistance queue Set.empty (distanceMap, previousMap)
           distance = Map.findWithDefault maxDistance end distanceMap'
           paths = map reverse (getPaths end previousMap')
-       in (distance, Paths (map Path paths))
+       in (distance, paths)
 
 dijkstra' :: (HasCallStack) => (Eq n, Ord n, Eq d, Ord d, Num d, Graph n d) => n -> d -> Queue n d -> Visited n -> (DistanceMap n d, PreviousMap n) -> (DistanceMap n d, PreviousMap n)
 dijkstra' end maxDistance queue visited maps = case Heap.view queue of
