@@ -1,3 +1,5 @@
+module Main (main) where
+
 part1 input = input
 
 part2 input = input
