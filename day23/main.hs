@@ -22,22 +22,36 @@ part1 input =
         sort $
           map sort (concatMap (\k -> findInterconnected 3 k input) (Map.keys (connections input)))
 
-part2 input = input
+part2 input =
+  last
+    $ takeWhile
+      (not . null . snd)
+    $ map
+      ( \count ->
+          ( count,
+            filter (\l -> length l == count) $
+              Set.toList . Set.fromList $
+                sort $
+                  map sort $
+                    concatMap (\k -> findInterconnected count k input) (Map.keys $ connections input)
+          )
+      )
+      [1 ..]
 
 findInterconnected :: Int -> Computer -> LAN -> [[Computer]]
 findInterconnected 0 _ _ = []
 findInterconnected count start (LAN lan) =
   let connections = (Map.!) lan start
-   in (sort . Set.toList . Set.fromList)
-        ( concatMap
-            ( \c ->
-                let inter = findInterconnected (count - 1) c (LAN lan)
-                 in if null inter
-                      then [[start]]
-                      else map (start :) (filter (all (`elem` connections)) inter)
-            )
-            connections
-        )
+      connectionsSet = Set.fromList connections
+   in Set.toList . Set.fromList $
+        concatMap
+          ( \c ->
+              let inter = findInterconnected (count - 1) c (LAN lan)
+               in if null inter
+                    then [[start]]
+                    else map (start :) (filter (\i -> length i == count && all (`Set.member` connectionsSet) i) inter)
+          )
+          connections
 
 main :: IO ()
 main = do
@@ -47,13 +61,13 @@ main = do
   inputFile <- readFile "./input.txt"
   let input = processInput inputFile
 
-  putStrLn "\n----- Part 1 -----"
+  -- putStrLn "\n----- Part 1 -----"
   -- mapM_ print (Map.toList (connections test))
   -- print (part1 test) -- Expected: ?
-  print (part1 input) -- Expected: ?
-  -- putStrLn "\n----- Part 2 -----"
-  -- print (part2 test) -- Expected: ?
-  -- print (part2 input) -- Expected: ?
+  -- print (part1 input) -- Expected: ?
+  putStrLn "\n----- Part 2 -----"
+  mapM_ print (part2 test) -- Expected: ?
+  mapM_ print (part2 input) -- Expected: ?
 
 processInput :: [Char] -> LAN
 processInput contents =
