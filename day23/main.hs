@@ -1,5 +1,6 @@
 module Main (main) where
 
+import Control.Monad.ST (ST, runST)
 import Data.Foldable (Foldable (..))
 import Data.List (sort)
 import Data.Map qualified as Map
@@ -15,25 +16,26 @@ instance Show Computer where
 newtype LAN = LAN {connections :: Map.Map Computer (Set.Set Computer)}
   deriving (Show)
 
+part1 :: LAN -> Int
 part1 input =
   length $
     filter (any ((\(ch : _) -> ch == 't') . name)) $
       Set.toList . Set.fromList $
         concatMap (\k -> findInterconnected 3 k input) (Map.keys (connections input))
 
+part2 :: LAN -> (Int, [Set.Set Computer])
 part2 input =
-  last
-    $ takeWhile
-      (not . null . snd)
-    $ map
-      ( \count ->
-          ( count,
-            traceShow count $
-              Set.toList . Set.fromList $
-                concatMap (\k -> findInterconnected count k input) (Map.keys $ connections input)
-          )
-      )
-      [1 ..]
+  last $
+    takeWhile (not . null . snd) $
+      map
+        ( \count ->
+            ( count,
+              traceShow count $
+                Set.toList . Set.fromList $
+                  concatMap (\k -> findInterconnected count k input) (Map.keys $ connections input)
+            )
+        )
+        [1 ..]
 
 findInterconnected :: Int -> Computer -> LAN -> [Set.Set Computer]
 findInterconnected 0 _ _ = []
