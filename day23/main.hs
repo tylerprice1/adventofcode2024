@@ -12,15 +12,14 @@ newtype Computer = Computer {name :: String}
 instance Show Computer where
   show (Computer s) = s
 
-newtype LAN = LAN {connections :: Map.Map Computer [Computer]}
+newtype LAN = LAN {connections :: Map.Map Computer (Set.Set Computer)}
   deriving (Show)
 
 part1 input =
   length $
     filter (any ((\(ch : _) -> ch == 't') . name)) $
       Set.toList . Set.fromList $
-        sort $
-          map sort (concatMap (\k -> findInterconnected 3 k input) (Map.keys (connections input)))
+        concatMap (\k -> findInterconnected 3 k input) (Map.keys (connections input))
 
 part2 input =
   last
@@ -29,29 +28,31 @@ part2 input =
     $ map
       ( \count ->
           ( count,
-            filter (\l -> length l == count) $
+            traceShow count $
               Set.toList . Set.fromList $
-                sort $
-                  map sort $
-                    concatMap (\k -> findInterconnected count k input) (Map.keys $ connections input)
+                concatMap (\k -> findInterconnected count k input) (Map.keys $ connections input)
           )
       )
       [1 ..]
 
-findInterconnected :: Int -> Computer -> LAN -> [[Computer]]
+findInterconnected :: Int -> Computer -> LAN -> [Set.Set Computer]
 findInterconnected 0 _ _ = []
+findInterconnected 1 start _ = [Set.singleton start]
 findInterconnected count start (LAN lan) =
   let connections = (Map.!) lan start
-      connectionsSet = Set.fromList connections
-   in Set.toList . Set.fromList $
-        concatMap
-          ( \c ->
-              let inter = findInterconnected (count - 1) c (LAN lan)
-               in if null inter
-                    then [[start]]
-                    else map (start :) (filter (\i -> length i == count && all (`Set.member` connectionsSet) i) inter)
-          )
-          connections
+   in concatMap
+        ( \c ->
+            map
+              (start `Set.insert`)
+              $ filter
+                ( \cs ->
+                    Set.size cs == (count - 1)
+                      && start `Set.notMember` cs
+                      && all (`Set.member` connections) cs
+                )
+              $ findInterconnected (count - 1) c (LAN lan)
+        )
+        connections
 
 main :: IO ()
 main = do
@@ -87,4 +88,4 @@ processInput contents =
           )
           Map.empty
           connections
-   in LAN (Map.map sort lan)
+   in LAN (Map.map Set.fromList lan)
