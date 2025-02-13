@@ -1,53 +1,43 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Avoid lambda" #-}
 module Main (main) where
 
+import Data.Foldable (Foldable (..))
 import Data.List (sort)
 import Data.Map qualified as Map
-import Debug.Trace (trace, traceShow, traceShowId)
+import Data.Set qualified as Set
+import Debug.Trace (traceShow, traceShowId)
 
-data Computer = Computer {name :: String, connections :: [Computer]}
-
-connectTo from (Computer n cs) = Computer n (sort (from : cs))
-
-instance Eq Computer where
-  (==) (Computer a _) (Computer b _) = a == b
-
-instance Ord Computer where
-  compare (Computer a _) (Computer b _) = compare a b
+newtype Computer = Computer {name :: String}
+  deriving (Eq, Ord)
 
 instance Show Computer where
-  show (Computer s cs) =
-    "Computer "
-      ++ s
-      ++ " -> "
-      ++ show (map name cs)
+  show (Computer s) = s
 
-findInterconnected :: Int -> Computer -> [[Computer]]
-findInterconnected 0 _ = []
-findInterconnected count start =
-  traceShow
-    (count, start)
-    concatMap
-    (map (start :) . findInterconnected (count - 1))
-    (connections start)
+newtype LAN = LAN {connections :: Map.Map Computer [Computer]}
+  deriving (Show)
 
-part1 = map (findInterconnected 3 . traceShowId)
-
--- let m =
---       foldr
---         ( \connection m ->
---             let (Connection c1 c2) = connection
---                 m' = Map.alter (Just . maybe [connection] (connection :)) c2 m
---                 m'' = Map.alter (Just . maybe [connection] (connection :)) c1 m'
---              in m''
---         )
---         (Map.empty :: Map.Map Computer [Connection])
---         input
---  in LAN m
+part1 input =
+  length $
+    filter (any ((\(ch : _) -> ch == 't') . name)) $
+      Set.toList . Set.fromList $
+        sort $
+          map sort (concatMap (\k -> findInterconnected 3 k input) (Map.keys (connections input)))
 
 part2 input = input
+
+findInterconnected :: Int -> Computer -> LAN -> [[Computer]]
+findInterconnected 0 _ _ = []
+findInterconnected count start (LAN lan) =
+  let connections = (Map.!) lan start
+   in (sort . Set.toList . Set.fromList)
+        ( concatMap
+            ( \c ->
+                let inter = findInterconnected (count - 1) c (LAN lan)
+                 in if null inter
+                      then [[start]]
+                      else map (start :) (filter (all (`elem` connections)) inter)
+            )
+            connections
+        )
 
 main :: IO ()
 main = do
@@ -58,35 +48,29 @@ main = do
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  putStrLn "Test data:"
-  mapM_ print test
-  putStrLn ""
-  mapM_ print (part1 (take 1 test)) -- Expected: ?
-  -- mapM_ print (part1 input) -- Expected: ?
+  -- mapM_ print (Map.toList (connections test))
+  -- print (part1 test) -- Expected: ?
+  print (part1 input) -- Expected: ?
   -- putStrLn "\n----- Part 2 -----"
   -- print (part2 test) -- Expected: ?
   -- print (part2 input) -- Expected: ?
 
-processInput :: String -> [Computer]
+processInput :: [Char] -> LAN
 processInput contents =
   let lns = lines contents
-      readline (ch1 : ch2 : '-' : ch3 : ch4 : "") = (Computer [ch1, ch2] [], Computer [ch3, ch4] [])
-      connectionless = map readline (lines contents)
-
-      connectionlessComputersMap =
-        foldr
-          (\(c1, c2) m -> Map.insert (name c2) c2 (Map.insert (name c1) c1 m))
-          Map.empty
-          connectionless
-
-      computersMap =
+      connections =
+        map
+          ( \(ch1 : ch2 : '-' : ch3 : ch4 : "") ->
+              (Computer [ch1, ch2], Computer [ch3, ch4])
+          )
+          lns
+      lan =
         foldr
           ( \(c1, c2) m ->
-              let m' = Map.adjust (c1 `connectTo`) (name c2) m
-                  m'' = Map.adjust (c2 `connectTo`) (name c1) m'
+              let m' = Map.alter (Just . maybe [c1] (c1 :)) c2 m
+                  m'' = Map.alter (Just . maybe [c2] (c2 :)) c1 m'
                in m''
           )
-          connectionlessComputersMap
-          connectionless
-      computers = Map.elems computersMap
-   in computers
+          Map.empty
+          connections
+   in LAN (Map.map sort lan)
