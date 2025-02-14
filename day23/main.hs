@@ -16,6 +16,27 @@ instance Show Computer where
 newtype LAN = LAN {connections :: Map.Map Computer (Set.Set Computer)}
   deriving (Show)
 
+type Cache = Map.Map (Int, Computer) [Set.Set Computer]
+
+findInterconnected :: Int -> Computer -> LAN -> [Set.Set Computer]
+findInterconnected 0 _ _ = []
+findInterconnected 1 start _ = [Set.singleton start]
+findInterconnected count start (LAN lan) =
+  let connections = (Map.!) lan start
+   in concatMap
+        ( \c ->
+            map
+              (start `Set.insert`)
+              $ filter
+                ( \cs ->
+                    Set.size cs == (count - 1)
+                      && start `Set.notMember` cs
+                      && all (`Set.member` connections) cs
+                )
+              $ findInterconnected (count - 1) c (LAN lan)
+        )
+        connections
+
 part1 :: LAN -> Int
 part1 input =
   length $
@@ -36,25 +57,6 @@ part2 input =
             )
         )
         [1 ..]
-
-findInterconnected :: Int -> Computer -> LAN -> [Set.Set Computer]
-findInterconnected 0 _ _ = []
-findInterconnected 1 start _ = [Set.singleton start]
-findInterconnected count start (LAN lan) =
-  let connections = (Map.!) lan start
-   in concatMap
-        ( \c ->
-            map
-              (start `Set.insert`)
-              $ filter
-                ( \cs ->
-                    Set.size cs == (count - 1)
-                      && start `Set.notMember` cs
-                      && all (`Set.member` connections) cs
-                )
-              $ findInterconnected (count - 1) c (LAN lan)
-        )
-        connections
 
 main :: IO ()
 main = do
