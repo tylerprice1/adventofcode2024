@@ -23,17 +23,18 @@ findInterconnected 0 _ _ = []
 findInterconnected 1 start _ = [Set.singleton start]
 findInterconnected count start (LAN lan) =
   let connections = (Map.!) lan start
+      count_1 = count - 1
    in concatMap
         ( \c ->
             map
               (start `Set.insert`)
               $ filter
                 ( \cs ->
-                    Set.size cs == (count - 1)
+                    Set.size cs == count_1
                       && start `Set.notMember` cs
                       && all (`Set.member` connections) cs
                 )
-              $ findInterconnected (count - 1) c (LAN lan)
+              $ findInterconnected count_1 c (LAN lan)
         )
         connections
 
@@ -74,7 +75,7 @@ main = do
   mapM_ print (part2 test) -- Expected: ?
   mapM_ print (part2 input) -- Expected: ?
 
-processInput :: [Char] -> LAN
+processInput :: String -> LAN
 processInput contents =
   let lns = lines contents
       connections =
