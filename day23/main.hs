@@ -69,7 +69,7 @@ part2 lan cache =
         foldr'
           ( \count (acc, cache) ->
               let (cs, cache') = getAllInterconnected count lan cache
-               in (cs : acc, cache')
+               in (cs : traceShow count acc, cache')
           )
           ([], cache)
           (take (Map.size (connections lan)) [1 ..])
