@@ -59,7 +59,7 @@ main = do
   print (part1 input) -- Expected: 1077
   --
   putStrLn "\n----- Part 2 -----"
-  mapM_ print (part2 test) -- Expected: ?
+  mapM_ print (part2 test) -- Expected: co,de,ka,ta
   mapM_ print (part2 input) -- Expected: ?
 
 processInput :: String -> LAN
