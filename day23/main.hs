@@ -55,8 +55,8 @@ main = do
   let input = processInput inputFile
 
   putStrLn "\n----- Part 1 -----"
-  print (part1 test) -- Expected: ?
-  print (part1 input) -- Expected: ?
+  print (part1 test) -- Expected: 7
+  print (part1 input) -- Expected: 1077
   --
   putStrLn "\n----- Part 2 -----"
   mapM_ print (part2 test) -- Expected: ?
