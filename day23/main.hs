@@ -41,10 +41,10 @@ findInterconnected count start (LAN lan) cache = case Map.lookup (count, start) 
 
         valid =
           filter
-            (\cs -> Set.size cs == count_1 && start `Set.notMember` cs && all (`Set.member` connections) cs)
+            (\cs -> start `Set.notMember` cs && all (`Set.member` connections) cs && Set.size cs == count_1)
             interconnections
 
-        result = map (start `Set.insert`) valid
+        result = unique $ map (start `Set.insert`) valid
      in (result, Map.insert (count, start) result cache')
 
 getAllInterconnected :: Int -> LAN -> Cache -> ([Set.Set Computer], Cache)
@@ -57,9 +57,6 @@ getAllInterconnected count lan cache =
       )
       ([], cache)
       (Map.keys (connections lan))
-
--- getAllInterconnectedCounts :: LAN -> Cache -> ([[Set.Set Computer]], Cache)
--- getAllInterconnectedCounts lan cache = foldr
 
 part1 :: LAN -> Cache -> (Int, Cache)
 part1 lan cache =
@@ -86,18 +83,21 @@ main = do
   inputFile <- readFile "./input.txt"
   let input = processInput inputFile
 
-  let cache = Map.empty
+  let testCache = Map.empty
+  let inputCache = Map.empty
 
   putStrLn "\n----- Part 1 -----"
-  let (part1_test, cache') = part1 test cache
+  let (part1_test, testCache') = part1 test testCache
   print (7, part1_test) -- Expected: 7
-  let (part1_input, cache'') = part1 input cache'
+  --
+  let (part1_input, inputCache') = part1 input inputCache
   print (1077, part1_input) -- Expected: 1077
   --
   putStrLn "\n----- Part 2 -----"
-  let (part2_test, cache''') = part2 test cache''
+  let (part2_test, _) = part2 test testCache'
   mapM_ print part2_test -- Expected: co,de,ka,ta
-  let (part2_input, _) = part2 input cache'''
+  --
+  let (part2_input, _) = part2 input inputCache'
   mapM_ print part2_input -- Expected: ?
 
 processInput :: String -> LAN
